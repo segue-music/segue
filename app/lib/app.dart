@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 
+import 'player/media_controls.dart';
 import 'services.dart';
 import 'session.dart';
 import 'ui/home_page.dart';
 import 'ui/login_page.dart';
 
 class SegueApp extends StatefulWidget {
-  const SegueApp({required this.session, super.key});
+  const SegueApp({required this.session, this.mediaControls, super.key});
 
   /// The saved session, if any: then the app opens straight on the library.
   final Session? session;
+
+  /// The system's media controls, where the platform has them.
+  final MediaControls? mediaControls;
 
   @override
   State<SegueApp> createState() => _SegueAppState();
@@ -39,6 +43,7 @@ class _SegueAppState extends State<SegueApp> {
         return;
       }
       setState(() => _services = services);
+      widget.mediaControls?.attach(services.connect, services.api);
     } on Exception catch (e) {
       if (mounted) setState(() => _error = e);
     } finally {
@@ -52,6 +57,7 @@ class _SegueAppState extends State<SegueApp> {
       _services = null;
       _error = null;
     });
+    widget.mediaControls?.attach(null, null);
     await services?.dispose();
     await Session.clear();
   }

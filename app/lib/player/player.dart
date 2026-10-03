@@ -48,6 +48,10 @@ class PlayerController extends ChangeNotifier {
     _changed();
   }
 
+  Future<void> play() => _engine.play();
+
+  Future<void> pause() => _engine.pause();
+
   Future<void> toggle() => playing ? _engine.pause() : _engine.play();
 
   Future<void> next() => _jump(index + 1);

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
@@ -68,6 +69,15 @@ class SubsonicApi {
   Uri streamUrl(String songId) => _url('stream', {'id': songId});
 
   Uri coverArtUrl(String id, {int size = 300}) => _url('getCoverArt', {'id': id, 'size': '$size'});
+
+  /// The cover's image bytes.
+  Future<Uint8List> coverArt(String id, {int size = 300}) async {
+    final response = await _http.get(coverArtUrl(id, size: size));
+    if (response.statusCode != 200 || !(response.headers['content-type'] ?? '').startsWith('image/')) {
+      throw SubsonicError(null, 'no cover for $id (HTTP ${response.statusCode})');
+    }
+    return response.bodyBytes;
+  }
 
   Uri _url(String endpoint, [Map<String, String> params = const {}]) => server
       .resolve('rest/$endpoint.view')

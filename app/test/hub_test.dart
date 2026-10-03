@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:segue/connect/connect.dart';
+import 'package:segue/player/media_controls.dart';
 import 'package:segue/player/player.dart';
 import 'package:segue/segue/client.dart';
 import 'package:segue/segue/protocol.dart';
@@ -201,6 +202,21 @@ void main() {
     await until(() => !laptop.player.playing, 'the laptop to pause');
     expect(phone.player.playing, isTrue);
     await until(() => laptop.connect.nowPlaying?.device == 'phone', 'the laptop to follow the phone');
+  });
+
+  test('the system controls of an app that follows another device command that device', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    final phone = await App(user, 'phone').start();
+    final controls = MediaControls()..attach(phone.connect, null);
+    addTearDown(() => controls.attach(null, null));
+    await laptop.player.playQueue(songs);
+    await until(() => controls.mediaItem.value?.artist == 'Aerosmith (em laptop)', 'the phone to show the laptop');
+    expect(controls.mediaItem.value?.title, 'Dream On');
+    await controls.pause();
+    expect(laptop.player.playing, isFalse);
+    await controls.play();
+    expect(laptop.player.playing, isTrue);
   });
 
   test('the Spotify flow: control another device, then move the music here', () async {

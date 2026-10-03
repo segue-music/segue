@@ -104,6 +104,10 @@ class ConnectController extends ChangeNotifier {
     () => player.playQueue(songs, index: index),
   );
 
+  Future<Result> play() => _run(const Command(CommandAction.play), player.play);
+
+  Future<Result> pause() => _run(const Command(CommandAction.pause), player.pause);
+
   Future<Result> toggle() => _run(const Command(CommandAction.toggle), player.toggle);
 
   Future<Result> next() => _run(const Command(CommandAction.next), player.next);
