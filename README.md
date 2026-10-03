@@ -66,3 +66,7 @@ listens on `0.0.0.0:8480`.
 4. Propose it: an OpenSubsonic discussion (next to
    [#277](https://github.com/opensubsonic/open-subsonic-api/discussions/277)), Navidrome, and the
    open-source apps.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
