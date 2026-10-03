@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
 
 /// What [PlayerController] needs from an audio backend. [MediaKitEngine] is the real one; the tests
@@ -27,11 +28,16 @@ abstract class AudioEngine {
 
 /// Plays through media_kit (libmpv), on every platform.
 class MediaKitEngine implements AudioEngine {
-  MediaKitEngine() {
+  /// [silent] sends the audio nowhere: for tests on a machine without sound.
+  MediaKitEngine({@visibleForTesting bool silent = false}) {
+    _ready = silent ? (_player.platform as NativePlayer).setProperty('ao', 'null') : Future.value();
     final stream = _player.stream;
     _subscriptions = [
       stream.playing.listen((_) => _changes.add(null)),
-      stream.playlist.listen((_) => _changes.add(null)),
+      stream.playlist.listen((playlist) {
+        _index = playlist.index;
+        _changes.add(null);
+      }),
       stream.volume.listen((_) => _changes.add(null)),
       stream.completed.listen((_) => _changes.add(null)),
     ];
@@ -40,6 +46,12 @@ class MediaKitEngine implements AudioEngine {
   final _player = Player();
   final _changes = StreamController<void>.broadcast();
   late final List<StreamSubscription<Object?>> _subscriptions;
+  late final Future<void> _ready;
+
+  // The current track, from the playlist events and our own calls. media_kit's
+  // state.playlist.index can't be trusted: on every open it drops to 0 for a moment, unannounced,
+  // and comes back silently (its playlist stream skips a repeat of what it already announced).
+  int _index = 0;
 
   @override
   Stream<void> get changes => _changes.stream;
@@ -48,7 +60,7 @@ class MediaKitEngine implements AudioEngine {
   bool get playing => _player.state.playing;
 
   @override
-  int get index => _player.state.playlist.index;
+  int get index => _index;
 
   @override
   Duration get position => _player.state.position;
@@ -58,6 +70,8 @@ class MediaKitEngine implements AudioEngine {
 
   @override
   Future<void> open(List<Uri> tracks, {required int index, required Duration position, required bool play}) async {
+    await _ready;
+    _index = index;
     final playlist = Playlist([for (final track in tracks) Media(track.toString())], index: index);
     if (position == Duration.zero) {
       await _player.open(playlist, play: play);
@@ -78,10 +92,16 @@ class MediaKitEngine implements AudioEngine {
   Future<void> pause() => _player.pause();
 
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> stop() {
+    _index = 0;
+    return _player.stop();
+  }
 
   @override
-  Future<void> jump(int index) => _player.jump(index);
+  Future<void> jump(int index) {
+    _index = index;
+    return _player.jump(index);
+  }
 
   @override
   Future<void> seek(Duration position) => _player.seek(position);

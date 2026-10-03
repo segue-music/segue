@@ -219,6 +219,17 @@ void main() {
     expect(laptop.player.playing, isTrue);
   });
 
+  test('a device that follows another sees its track change', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    final phone = await App(user, 'phone').start();
+    await laptop.player.playQueue(songs);
+    await until(() => phone.connect.nowPlaying?.title == 'Dream On', 'the phone to show the first track');
+    await laptop.player.next();
+    await until(() => phone.connect.nowPlaying?.title == 'Other', 'the phone to show the next track');
+    expect(phone.connect.nowPlaying!.position.inSeconds, lessThan(2));
+  });
+
   test('the Spotify flow: control another device, then move the music here', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();
