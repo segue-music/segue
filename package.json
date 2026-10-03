@@ -1,0 +1,24 @@
+{
+  "name": "segue",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Draft of an open \"Connect\" protocol for OpenSubsonic and Jellyfin players, with a reference hub",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "demo": "node examples/demo.ts",
+    "test": "node --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "@types/ws": "^8.18.2",
+    "typescript": "^7.0.2"
+  }
+}
