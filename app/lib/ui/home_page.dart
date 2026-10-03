@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../segue/client.dart';
+import '../segue/protocol.dart';
 import '../services.dart';
 import '../subsonic/models.dart';
 import 'album_page.dart';
@@ -114,7 +115,12 @@ class _HubStatus extends StatelessWidget {
         HubStatus.connected => const Tooltip(message: 'Conectado ao hub', child: Icon(Icons.cloud_done)),
         HubStatus.connecting => const Tooltip(message: 'Conectando ao hub…', child: Icon(Icons.cloud_sync)),
         HubStatus.offline => const Tooltip(message: 'Hub fora do ar; tentando de novo', child: Icon(Icons.cloud_off)),
-        HubStatus.rejected => const Tooltip(message: 'O hub recusou este aparelho', child: Icon(Icons.error_outline)),
+        HubStatus.rejected => Tooltip(
+          message: client.lastClose?.code == CloseCode.replaced
+              ? 'Este aparelho se conectou de novo em outro lugar (outra cópia do app aberta?)'
+              : 'O hub recusou este aparelho',
+          child: const Icon(Icons.error_outline),
+        ),
       },
     );
   }

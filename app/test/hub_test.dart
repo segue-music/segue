@@ -101,6 +101,19 @@ void main() {
     );
   });
 
+  test('a copy kicked out by another with the same device id stays out', () async {
+    final user = newUser();
+    final first = App(user, 'laptop');
+    unawaited(first.client.start());
+    addTearDown(first.client.close);
+    await until(() => first.client.status == HubStatus.connected, 'the first copy');
+    final second = await App(user, 'laptop').start();
+    await until(() => first.client.status == HubStatus.rejected, 'the first copy to give up');
+    expect(first.client.lastClose?.code, CloseCode.replaced);
+    await Future<void>.delayed(const Duration(milliseconds: 1500)); // longer than the backoff
+    expect(second.client.status, HubStatus.connected);
+  });
+
   test('sees what another device plays, on the hub clock', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();

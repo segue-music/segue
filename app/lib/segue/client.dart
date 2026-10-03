@@ -61,6 +61,9 @@ class SegueClient extends ChangeNotifier {
   final devices = <String, Device>{};
   HubStatus status = HubStatus.offline;
 
+  /// How the last connection ended; says why when [status] is [HubStatus.rejected].
+  HubClosed? lastClose;
+
   final WebSocketChannel Function(Uri url) _channelFactory;
   WebSocketChannel? _channel;
   bool _open = false;
@@ -83,7 +86,15 @@ class SegueClient extends ChangeNotifier {
         await connect();
         backoff = const Duration(seconds: 1);
         await closed;
+        // Closed by the hub after accepting us: the same device connected elsewhere (4003)
+        // must not reconnect, or the two would take turns kicking each other out.
+        if (lastClose?.isFinal ?? false) {
+          _running = false;
+          _setStatus(HubStatus.rejected);
+          return;
+        }
       } on HubClosed catch (e) {
+        lastClose = e;
         if (e.isFinal) {
           _running = false;
           _setStatus(HubStatus.rejected);
@@ -120,6 +131,7 @@ class SegueClient extends ChangeNotifier {
       },
       onDone: () {
         _open = false;
+        lastClose = HubClosed(channel.closeCode, channel.closeReason);
         for (final waiting in _waiting.values) {
           waiting.complete(const Result(ok: false, error: 'closed'));
         }
