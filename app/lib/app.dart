@@ -5,6 +5,7 @@ import 'services.dart';
 import 'session.dart';
 import 'ui/home_page.dart';
 import 'ui/login_page.dart';
+import 'ui/shortcuts.dart';
 
 class SegueApp extends StatefulWidget {
   const SegueApp({required this.session, this.mediaControls, super.key});
@@ -70,8 +71,13 @@ class _SegueAppState extends State<SegueApp> {
       debugShowCheckedModeBanner: false,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      // Above the navigator, so that every page and sheet sees the services.
-      builder: services == null ? null : (context, child) => ServicesScope(services: services, child: child!),
+      // Above the navigator, so that every page and sheet sees the services and the shortcuts.
+      builder: services == null
+          ? null
+          : (context, child) => ServicesScope(
+              services: services,
+              child: PlaybackShortcuts(child: child!),
+            ),
       home: services != null
           ? HomePage(onSignOut: _signOut)
           : _starting
