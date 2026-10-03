@@ -30,6 +30,20 @@ Not yet: search, artists, playlists, a full-screen player, lock-screen and media
 
 ## Running on Linux
 
+### A build from elsewhere, without Flutter
+
+`tool/package-linux.sh` builds the Linux version (with Flutter from Docker, see below) and packs
+it as `build/segue-linux-x64.tar.gz`, 10 MB. The computer that runs it needs glibc 2.38 or newer,
+GTK 3, libsecret and libmpv, all runtime packages. On Fedora (checked on Fedora 44):
+
+```sh
+sudo dnf install gtk3 libsecret mpv-libs
+tar xzf segue-linux-x64.tar.gz
+segue/segue
+```
+
+### With Flutter installed
+
 Install Flutter 3.47 ([instructions](https://docs.flutter.dev/get-started/install/linux)) and
 what the Linux build needs: clang, cmake, make, ninja, pkg-config, GTK 3, liblzma and libstdc++
 headers, plus the headers of libmpv (audio) and libsecret (secure storage). On Fedora that should
@@ -53,16 +67,16 @@ computer, pointing at Navidrome:
 ```sh
 cd hub
 go build -o segue-hub ./cmd/segue-hub
-SEGUE_UPSTREAM=https://navidrome.example ./segue-hub
+env SEGUE_UPSTREAM=https://navidrome.example ./segue-hub
 ```
 
-and at sign-in, under "Avançado", put `http://127.0.0.1:8480` as the hub's address.
+and at sign-in, under "Avançado", put `http://127.0.0.1:8480` as the hub's address. The hub's
+binary is static, so one built elsewhere (`../hub/segue-hub` on the server) runs as it is.
 
-To see two devices on one computer, start a second copy of the built app as another device:
+To see two devices on one computer, start a second copy of the app as another device:
 
 ```sh
-flutter build linux
-SEGUE_DEVICE_ID=second SEGUE_DEVICE_NAME="Segundo" build/linux/x64/release/bundle/segue
+env SEGUE_DEVICE_ID=second SEGUE_DEVICE_NAME=Segundo segue/segue
 ```
 
 ## Building and testing without Flutter installed
@@ -76,4 +90,5 @@ tool/flutter.sh pub get
 tool/flutter.sh analyze
 tool/flutter.sh test
 tool/flutter.sh build linux
+tool/package-linux.sh
 ```
