@@ -61,8 +61,9 @@ Sign in with the Navidrome address (`https://` is added if left out), user and p
 
 ### Connect
 
-Connect needs the hub (`../hub`). Until it runs next to Navidrome on the server, run it on your
-computer, pointing at Navidrome:
+Connect needs the hub (`../hub`). Published at `/connect` on the media server's address, it is
+found by itself, with nothing to type at sign-in. To try it without that, run it on your computer,
+pointing at the media server:
 
 ```sh
 cd hub
