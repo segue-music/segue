@@ -64,6 +64,9 @@ class SegueClient extends ChangeNotifier {
   /// How the last connection ended; says why when [status] is [HubStatus.rejected].
   HubClosed? lastClose;
 
+  /// The user's last playback, as of the last welcome.
+  LastPlayback? lastPlayback;
+
   final WebSocketChannel Function(Uri url) _channelFactory;
   WebSocketChannel? _channel;
   bool _open = false;
@@ -173,6 +176,8 @@ class SegueClient extends ChangeNotifier {
     switch (msg['type']) {
       case 'welcome':
         _clockOffset = (msg['serverTime'] as num).toInt() - DateTime.now().millisecondsSinceEpoch;
+        final last = msg['lastPlayback'] as Map<String, dynamic>?;
+        lastPlayback = last == null ? null : LastPlayback.fromJson(last);
         devices
           ..clear()
           ..addEntries(

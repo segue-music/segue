@@ -30,6 +30,9 @@ type Options struct {
 	CommandTimeout time.Duration
 	// OfflineTTL is how long an offline device, with its last state, stays listed. Default 24 h.
 	OfflineTTL time.Duration
+	// StatePath is a file where each user's last playback is kept across restarts. Empty keeps it
+	// in memory only. Call Close at shutdown so the last change gets written.
+	StatePath string
 }
 
 // Conn is the hub's side of one connection. Send and Close must not block: the hub calls them
@@ -40,7 +43,8 @@ type Conn interface {
 }
 
 // Hub keeps the devices of each user, relays their state to the user's other devices and routes
-// commands between them. It holds nothing on disk: after a restart, devices just reconnect.
+// commands between them. Only each user's last playback can go to disk (Options.StatePath): after
+// a restart, devices just reconnect.
 type Hub struct {
 	opts Options
 	log  *slog.Logger
@@ -48,6 +52,8 @@ type Hub struct {
 	mu      sync.Mutex
 	users   map[string]map[string]*entry // user → device id → device
 	pending map[string]*pending          // command id → command waiting for its answer
+	last    map[string]*lastPlayback     // user → last playback
+	store   *store                       // nil without StatePath
 }
 
 type entry struct {
@@ -82,7 +88,12 @@ func New(opts Options) *Hub {
 	opts.CommandTimeout = cmp.Or(opts.CommandTimeout, 10*time.Second)
 	opts.OfflineTTL = cmp.Or(opts.OfflineTTL, 24*time.Hour)
 	log := cmp.Or(opts.Logger, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	return &Hub{opts: opts, log: log, users: map[string]map[string]*entry{}, pending: map[string]*pending{}}
+	h := &Hub{opts: opts, log: log, users: map[string]map[string]*entry{}, pending: map[string]*pending{}}
+	h.last = map[string]*lastPlayback{}
+	if opts.StatePath != "" {
+		h.store, h.last = openStore(opts.StatePath, log)
+	}
+	return h
 }
 
 // Session is one connection's life in the hub. The transport calls Message for each text frame,
@@ -198,10 +209,17 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 		}
 	}
 	slices.SortFunc(others, func(a, b Device) int { return strings.Compare(a.ID, b.ID) })
-	conn.Send(welcomeMsg{
+	welcome := welcomeMsg{
 		Type: "welcome", Protocol: ProtocolVersion, User: user,
 		ServerTime: h.opts.Now().UnixMilli(), Devices: others,
-	})
+	}
+	if last := h.last[e.user]; last != nil {
+		welcome.LastPlayback = &lastPlaybackMsg{
+			DeviceID: last.DeviceID, DeviceName: last.DeviceName,
+			State: h.translateState(last.State, last.API, info.API),
+		}
+	}
+	conn.Send(welcome)
 	h.announce(e)
 	h.log.Info("device connected", "user", user, "device", info.Name, "client", info.Client)
 	return e
@@ -215,6 +233,7 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 	}
 	e.conn, e.lastSeen = nil, h.opts.Now()
 	h.failPending(e, "offline")
+	h.freezeLastPlayback(e)
 	h.announce(e)
 	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name)
 }
@@ -258,6 +277,7 @@ func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
 	}
 	e.state.merge(report)
 	e.state.At, e.lastSeen = now.UnixMilli(), now
+	h.noteLastPlayback(e)
 	// Recipients merge the report into what they have, so relay only what the player sent.
 	relayed := StampedState{PlayerState: report, At: now.UnixMilli()}
 	h.broadcast(e, func(to *entry) any {

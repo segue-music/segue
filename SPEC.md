@@ -37,7 +37,7 @@ The OpenSubsonic discussion about a "Jam" function
 
 Not goals, for now: synchronized playback on several devices (multi-room, Jam), queues edited by
 several people, waking an app that isn't running, and playing on devices that run no compatible app.
-The last one can be done with bridges ([section 10](#10-bridges)).
+The last one can be done with bridges ([section 11](#11-bridges)).
 
 ## Overview
 
@@ -51,7 +51,8 @@ The last one can be done with bridges ([section 10](#10-bridges)).
 - A **device** is one installation of an app. It is a **player** (plays audio and obeys commands),
   a **controller** (shows the other devices and commands them), or both.
 - The **hub** keeps, for each user, their devices and the last state of each player. It relays
-  state and routes commands. It stores nothing on disk.
+  state and routes commands. Only each user's last playback may go to disk
+  ([section 7](#7-last-playback)).
 
 ## 1. Discovery
 
@@ -67,7 +68,7 @@ the media server's origin to it. Clients should also accept a hub URL typed by t
 once per sign-in, not on every request.
 
 A server that implements the hub itself could advertise it instead, for instance as an OpenSubsonic
-extension in `getOpenSubsonicExtensions` ([open questions](#11-open-questions)).
+extension in `getOpenSubsonicExtensions` ([open questions](#12-open-questions)).
 
 ## 2. Connection and authentication
 
@@ -219,7 +220,7 @@ The hub:
 
 1. takes the source's last state and works out its position now;
 2. sends the destination a `setQueue` with that queue, index and position (ids translated,
-   [section 7](#7-ids-across-apis));
+   [section 8](#8-ids-across-apis));
 3. if that worked and the source is online and playing, sends the source a `pause` (best effort:
    the music has already moved);
 4. answers the request with the destination's result, or `nothingToTransfer` when the source has
@@ -228,7 +229,31 @@ The hub:
 The source may be offline: its last state is enough. The destination may be the device asking,
 which is "continue here".
 
-## 7. Ids across APIs
+## 7. Last playback
+
+The hub keeps, for each user, the **last playback**: the state of the device that played last, so
+that an app opened after every app was closed can show where the music was, Spotify-style. It is
+the hub's own record, separate from the devices' states:
+
+- a device takes it over by reporting `playing` with a queue; the device that holds it also
+  updates it while paused (a seek, say);
+- a report without a queue never touches it: an app that has just opened, empty, does not wipe it;
+- when the device that holds it goes offline while playing, its clock stops: the position becomes
+  where playback had got to, and the status `paused`;
+- the reference hub can keep it on disk, so that it survives a restart.
+
+`welcome` carries it, with the queue in the device's API, when there is one:
+
+```json
+{ "type": "welcome", "...": "...",
+  "lastPlayback": { "deviceId": "...", "deviceName": "Living room TV", "state": { "status": "paused", "positionMs": 40000, "at": 1790000000000, "index": 1, "queue": [] } } }
+```
+
+An app that opens with nothing playing anywhere shows it: on its device, if that device is
+online (the app then controls it); otherwise here, loaded paused at the same point, so that play
+continues it here.
+
+## 8. Ids across APIs
 
 Queue items always reach a device with ids in that device's API. The hub translates when it knows
 how:
@@ -239,7 +264,7 @@ how:
 - When the hub can't translate an id, it leaves `id` out of the item. The metadata is still there,
   so the device can look the item up by title, artist and album, or skip it.
 
-## 8. Liveness and mobile apps
+## 9. Liveness and mobile apps
 
 - The hub pings each connection every 30 s (WebSocket ping) and drops one that hasn't answered by
   the next ping.
@@ -250,7 +275,7 @@ how:
   report their state on pausing, before they are suspended. Waking an app with a push notification
   is out of scope for version 1.
 
-## 9. Security
+## 10. Security
 
 - The hub checks every connection with the media server. It keeps no credentials, only a few
   minutes' cache of successful checks, keyed by a hash.
@@ -259,7 +284,7 @@ how:
 - `hello` carries credentials, so the hub must be reached over TLS (`wss://`) and run by the media
   server's admin, as the media server would be.
 
-## 10. Bridges
+## 11. Bridges
 
 The hub only routes messages, so other programs can register devices of their own:
 
@@ -268,7 +293,7 @@ The hub only routes messages, so other programs can register devices of their ow
   (`getNowPlaying`, Jellyfin's `/Sessions`), as devices with no capabilities;
 - a media server that implements the hub itself.
 
-## 11. Open questions
+## 12. Open questions
 
 - User identity across APIs on servers other than Navidrome (Jellyfin with a Subsonic plugin, for
   instance), where user names may not match.

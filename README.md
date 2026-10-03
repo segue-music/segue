@@ -48,6 +48,7 @@ SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
 | `SEGUE_UPSTREAM` | (required) | The media server's URL, as the hub reaches it |
 | `SEGUE_UPSTREAM_KIND` | `navidrome` | `navidrome` (Subsonic API, Jellyfin API at `/jellyfin`, ids translated), `subsonic` or `jellyfin` |
 | `SEGUE_LISTEN` | `127.0.0.1:8480` | Address and port |
+| `SEGUE_STATE` | | A file where each user's last playback is kept across restarts (SPEC, section 7). Empty keeps it in memory only |
 | `SEGUE_AUTH` | | `none` accepts any device, as the Subsonic user it claims (`dev` for other schemes). Only for trying things out |
 
 Clients find the hub at `/connect/` on the media server's origin, so route that path there in the

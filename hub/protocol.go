@@ -263,11 +263,19 @@ func validQueue(queue []QueueItem) bool {
 // Messages from the hub.
 
 type welcomeMsg struct {
-	Type       string   `json:"type"`
-	Protocol   int      `json:"protocol"`
-	User       string   `json:"user"`
-	ServerTime int64    `json:"serverTime"`
-	Devices    []Device `json:"devices"`
+	Type         string           `json:"type"`
+	Protocol     int              `json:"protocol"`
+	User         string           `json:"user"`
+	ServerTime   int64            `json:"serverTime"`
+	Devices      []Device         `json:"devices"`
+	LastPlayback *lastPlaybackMsg `json:"lastPlayback,omitempty"`
+}
+
+// lastPlaybackMsg is a last playback as a device receives it: the queue already in its API.
+type lastPlaybackMsg struct {
+	DeviceID   string       `json:"deviceId"`
+	DeviceName string       `json:"deviceName"`
+	State      StampedState `json:"state"`
 }
 
 type deviceMsg struct {

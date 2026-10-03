@@ -42,7 +42,10 @@ func main() {
 	if kind == hub.KindNavidrome {
 		translate = hub.NavidromeIDs
 	}
-	h := hub.New(hub.Options{Authenticate: authenticate, Translate: translate, Logger: log})
+	h := hub.New(hub.Options{
+		Authenticate: authenticate, Translate: translate, Logger: log,
+		StatePath: os.Getenv("SEGUE_STATE"),
+	})
 
 	listener, err := net.Listen("tcp", env("SEGUE_LISTEN", "127.0.0.1:8480"))
 	if err != nil {
@@ -71,6 +74,8 @@ func main() {
 	if err := server.Serve(listener); !errors.Is(err, http.ErrServerClosed) {
 		fail("server stopped", "err", err)
 	}
+	<-ctx.Done() // Serve returns as Shutdown starts; let it finish
+	h.Close()
 }
 
 func env(name, fallback string) string {

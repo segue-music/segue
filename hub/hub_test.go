@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -28,6 +29,8 @@ type received struct {
 	Re         string       `json:"re"`
 	OK         bool         `json:"ok"`
 	Error      string       `json:"error"`
+	// welcome
+	LastPlayback *lastPlaybackMsg `json:"lastPlayback"`
 }
 
 // testDevice is a device driven by hand: the test reads what the hub sends and answers itself.
@@ -69,6 +72,7 @@ func startHub(t *testing.T, opts Options) (string, *Hub) {
 		opts.Translate = NavidromeIDs
 	}
 	h := New(opts)
+	t.Cleanup(h.Close)
 	server := httptest.NewServer(h.Handler(nil))
 	t.Cleanup(server.Close)
 	return "ws" + strings.TrimPrefix(server.URL, "http") + "/v1/ws", h
@@ -470,5 +474,67 @@ func TestInfoEndpoint(t *testing.T) {
 	h.Handler(nil).ServeHTTP(w, httptest.NewRequest("GET", "/connectx/v1/info", nil))
 	if w.Code != 404 {
 		t.Errorf("/connectx/v1/info: %d", w.Code)
+	}
+}
+
+func TestLastPlayback(t *testing.T) {
+	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
+	path := filepath.Join(t.TempDir(), "last.json")
+	url, h := startHub(t, Options{Now: c.Now, StatePath: path})
+	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	stateFrom := func(d *testDevice, id string) {
+		t.Helper()
+		for d.expect("state").DeviceID != id {
+		}
+	}
+	phone.report(map[string]any{"status": "playing", "positionMs": 30000, "index": 1, "queue": songs})
+	stateFrom(tv, "phone")
+
+	// A paused device with a queue of its own doesn't take the last playback over, and an app that
+	// opens empty doesn't wipe it.
+	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs[:1]})
+	stateFrom(phone, "tv")
+	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, player, everything...))
+	pc.report(map[string]any{"status": "stopped", "positionMs": 0, "queue": []any{}})
+	stateFrom(tv, "pc")
+
+	// The phone goes away while playing: its position freezes where it got to.
+	c.advance(10 * time.Second)
+	_ = phone.ws.Close()
+	tv.expectDevice("phone", func(d Device) bool { return !d.Online })
+
+	_, welcome := join(t, url, as("alice"), info("laptop", Subsonic, controller))
+	last := welcome.LastPlayback
+	if last == nil || last.DeviceID != "phone" || last.DeviceName != "phone" {
+		t.Fatalf("last playback %+v", last)
+	}
+	if last.State.Status != Paused || last.State.PositionMs != 40000 || *last.State.Index != 1 {
+		t.Fatalf("state %+v", last.State.PlayerState)
+	}
+	if last.State.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" {
+		t.Fatalf("queue not in the Subsonic ids: %+v", last.State.Queue)
+	}
+
+	// It survives a restart, and reaches each device in its own API.
+	h.Close()
+	url2, _ := startHub(t, Options{StatePath: path})
+	_, welcome = join(t, url2, as("Alice"), info("laptop", Jellyfin, controller))
+	if last := welcome.LastPlayback; last == nil || last.State.PositionMs != 40000 || last.State.Queue[0].ID != songs[0]["id"] {
+		t.Fatalf("after a restart: %+v", last)
+	}
+}
+
+func TestLastPlaybackFollowsWhoPlays(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	tv.expect("state")
+	tv.report(map[string]any{"status": "playing", "positionMs": 5000, "queue": songs[1:]})
+	phone.expect("state")
+	_, welcome := join(t, url, as("alice"), info("pc", Subsonic, controller))
+	if last := welcome.LastPlayback; last == nil || last.DeviceID != "tv" || len(last.State.Queue) != 1 {
+		t.Fatalf("last playback %+v", last)
 	}
 }

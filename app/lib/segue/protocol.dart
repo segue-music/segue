@@ -254,6 +254,23 @@ class Device {
   String get id => info.id;
 }
 
+/// The user's most recent playback, as the hub keeps it across app restarts (SPEC.md, "Last
+/// playback"): the queue is already in this device's API.
+class LastPlayback {
+  const LastPlayback({required this.deviceId, required this.deviceName, required this.state});
+
+  factory LastPlayback.fromJson(Map<String, dynamic> json) => LastPlayback(
+    deviceId: json['deviceId'] as String,
+    deviceName: json['deviceName'] as String,
+    state: StampedState.fromJson(json['state'] as Map<String, dynamic>),
+  );
+
+  /// The device it played on (possibly this one).
+  final String deviceId;
+  final String deviceName;
+  final StampedState state;
+}
+
 /// The answer to a command or a transfer.
 class Result {
   const Result({required this.ok, this.error});

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../player/player.dart';
@@ -38,7 +40,7 @@ class ConnectController extends ChangeNotifier {
     if (hub == null) return;
     hub.addListener(_update);
     hub.onCommand = (command, from) => player.obey(command);
-    hub.onConnected = () => hub.sendState(player.report(full: true));
+    hub.onConnected = () => unawaited(_connected());
     player.onReport = hub.sendState;
   }
 
@@ -53,6 +55,7 @@ class ConnectController extends ChangeNotifier {
   /// change means a device started playing, and the app follows it.
   String? _playing;
   static const _here = ''; // the hub never gives a device an empty id
+  bool _restored = false;
 
   /// The device the app controls; null is this one.
   String? get activeId => _active;
@@ -143,6 +146,37 @@ class ConnectController extends ChangeNotifier {
       return const Result(ok: true);
     } on CommandFailed catch (e) {
       return Result(ok: false, error: e.message);
+    }
+  }
+
+  Future<void> _connected() async {
+    if (!_restored) {
+      _restored = true;
+      await _restoreLastPlayback();
+    }
+    client!.sendState(player.report(full: true));
+  }
+
+  /// When the app opens and nothing plays, it shows where the music was (SPEC.md, "Last
+  /// playback"): on its device, if that one is on; otherwise here, paused at the same point, so
+  /// that play continues it.
+  Future<void> _restoreLastPlayback() async {
+    final hub = client!;
+    final last = hub.lastPlayback;
+    final queue = last?.state.queue;
+    if (last == null || queue == null || queue.isEmpty) return;
+    if (_whoIsPlaying() != null || player.queue.isNotEmpty) return;
+    if (last.deviceId != hub.device.id && (hub.devices[last.deviceId]?.online ?? false)) {
+      _active = last.deviceId;
+      notifyListeners();
+      return;
+    }
+    try {
+      await player.obey(
+        Command.setQueue(queue: queue, index: last.state.index ?? 0, positionMs: last.state.positionMs, play: false),
+      );
+    } on CommandFailed {
+      // nothing in it can be played here
     }
   }
 

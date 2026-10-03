@@ -1,6 +1,7 @@
 import { PROTOCOL_VERSION, currentPositionMs } from "./protocol.ts";
 import type {
-  Auth, ClientMessage, Command, CommandRequest, Device, DeviceInfo, HubMessage, PlayerState, Result, TransferRequest,
+  Auth, ClientMessage, Command, CommandRequest, Device, DeviceInfo, HubMessage, LastPlayback, PlayerState, Result,
+  TransferRequest,
 } from "./protocol.ts";
 
 export type ClientOptions = {
@@ -21,6 +22,8 @@ export type ClientOptions = {
 export class SegueClient {
   /** The user's other devices, by id. */
   readonly devices = new Map<string, Device>();
+  /** The user's last playback, as of the last welcome. */
+  lastPlayback?: LastPlayback;
   #opts: ClientOptions;
   #ws?: WebSocket;
   #seq = 0;
@@ -84,6 +87,7 @@ export class SegueClient {
     switch (msg.type) {
       case "welcome":
         this.#clockOffset = msg.serverTime - Date.now();
+        this.lastPlayback = msg.lastPlayback;
         this.devices.clear();
         for (const device of msg.devices) this.devices.set(device.id, device);
         break;

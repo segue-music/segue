@@ -75,7 +75,12 @@ export type Result = { type: "result"; re: string; ok: boolean; error?: string }
 export type ClientMessage = Hello | StateReport | CommandRequest | TransferRequest | Result;
 
 // Hub → device.
-export type Welcome = { type: "welcome"; protocol: number; user: string; serverTime: number; devices: Device[] };
+/** The user's most recent playback, kept by the hub across app restarts; the queue in this device's API. */
+export type LastPlayback = { deviceId: string; deviceName: string; state: StampedState };
+
+export type Welcome = {
+  type: "welcome"; protocol: number; user: string; serverTime: number; devices: Device[]; lastPlayback?: LastPlayback;
+};
 export type DeviceEvent = { type: "device"; device: Device };
 export type StateEvent = { type: "state"; deviceId: string; state: StampedState };
 export type GoneEvent = { type: "gone"; deviceId: string };

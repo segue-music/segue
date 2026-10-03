@@ -152,6 +152,45 @@ void main() {
     expect(phone.connect.nowPlaying?.title, 'Other');
   });
 
+  test('reopening the app brings back the last playback, paused where it was', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    await laptop.player.playQueue(songs, index: 1, position: const Duration(seconds: 30));
+    await Future<void>.delayed(const Duration(milliseconds: 100)); // the report reaches the hub
+    await laptop.client.close();
+    final reopened = await App(user, 'laptop').start();
+    await until(() => reopened.player.queue.isNotEmpty, 'the queue to come back');
+    expect(reopened.player.index, 1);
+    expect(reopened.player.playing, isFalse);
+    expect(reopened.player.position.inMilliseconds, inInclusiveRange(30000, 31000));
+    expect(reopened.connect.nowPlaying?.title, 'Other');
+    expect(reopened.connect.nowPlaying?.device, isNull);
+  });
+
+  test('another device opening after the last one closed continues it there', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    await laptop.player.playQueue(songs);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await laptop.client.close();
+    final phone = await App(user, 'phone').start();
+    await until(() => phone.player.queue.isNotEmpty, 'the queue on the phone');
+    expect(phone.player.current?.title, 'Dream On');
+    expect(phone.player.playing, isFalse);
+  });
+
+  test('opening while the last device is on and paused shows that device', () async {
+    final user = newUser();
+    final tv = await App(user, 'tv').start();
+    await tv.player.playQueue(songs);
+    await tv.player.toggle();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final phone = await App(user, 'phone').start();
+    await until(() => phone.connect.nowPlaying?.device == 'tv', 'the phone to show the TV');
+    expect(phone.connect.nowPlaying?.playing, isFalse);
+    expect(phone.player.queue, isEmpty);
+  });
+
   test('the Spotify flow: control another device, then move the music here', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();
