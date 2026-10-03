@@ -11,52 +11,61 @@ signs devices in with the credentials they already use with the media server, ke
 each player, and routes commands. Audio still comes from the media server. The problem, the design
 and the messages are in [SPEC.md](SPEC.md).
 
-**Status: skeleton.** The protocol is a first draft, and the hub works in tests and in the demo,
-with pretend players. No real app speaks it yet.
+**Status: skeleton.** The protocol is a first draft. The hub works in its tests and with the
+pretend players of the demo. No real app speaks it yet.
 
 ## Layout
 
-| File | What |
+| Folder | What |
 |---|---|
 | `SPEC.md` | The protocol |
-| `src/protocol.ts` | Message types and parsers, shared by hub and client |
-| `src/hub.ts` | The hub: devices per user, state relay, commands, transfer |
-| `src/server.ts` | HTTP and WebSocket: `GET /v1/info`, `/v1/ws` (also under `/connect/`) |
-| `src/auth.ts` | Checks credentials with the media server |
-| `src/ids.ts` | Translates Navidrome ids between the Subsonic and Jellyfin APIs |
-| `src/client.ts` | Reference client. Uses only the standard WebSocket API, so it runs in browsers, Node and React Native |
-| `src/main.ts` | Runs the hub from environment variables |
-| `examples/` | A pretend player, and a demo moving music from an "iPhone" to a "TV" |
+| `hub/` | The reference hub, in Go. Package `hub` (usable as a library), binary in `cmd/segue-hub` |
+| `client/` | The reference client, in TypeScript, plus a pretend player, a demo, and tests that run it against the hub |
 
-## Trying it
+The hub is in Go, the language of Navidrome, so that it can move into a media server. It also
+uses the same WebSocket library as Navidrome (`gorilla/websocket`). As a separate service it is
+one static binary: an 11 MB image, using about 2 MB of RAM when idle.
 
-Needs Node 24 or later, which runs the TypeScript files directly.
+The client is in TypeScript because the open-source apps closest to adopting the protocol, Feishin
+and Jellify, are written in it. It uses only the standard WebSocket API, so the same code runs in
+browsers, Node and React Native.
+
+## Hub
+
+Needs Go 1.27.
 
 ```sh
-npm install
-npm run demo        # hub + iPhone (Jellyfin API) + TV (Subsonic API) + PC; the PC moves the music
-npm test
-npm run typecheck
+cd hub
+go test -race ./...
+go build -o segue-hub ./cmd/segue-hub
+SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
 ```
-
-## Running
 
 | Variable | Default | |
 |---|---|---|
-| `SEGUE_UPSTREAM` | (required) | The media server's URL, as the hub reaches it, e.g. `http://127.0.0.1:4533` |
+| `SEGUE_UPSTREAM` | (required) | The media server's URL, as the hub reaches it |
 | `SEGUE_UPSTREAM_KIND` | `navidrome` | `navidrome` (Subsonic API, Jellyfin API at `/jellyfin`, ids translated), `subsonic` or `jellyfin` |
 | `SEGUE_LISTEN` | `127.0.0.1:8480` | Address and port |
-| `SEGUE_AUTH` | | `none` accepts any device as the user `dev`. Only for trying things out |
-
-```sh
-SEGUE_UPSTREAM=http://127.0.0.1:4533 npm start
-```
+| `SEGUE_AUTH` | | `none` accepts any device, as the Subsonic user it claims (`dev` for other schemes). Only for trying things out |
 
 Clients find the hub at `/connect/` on the media server's origin, so route that path there in the
-reverse proxy (it must be `https`, since devices send their credentials).
+reverse proxy. It must be `https`, because devices send their credentials.
 
-With Docker: `docker build -t segue .`, then run it with the variables above and
-`SEGUE_LISTEN=0.0.0.0:8480`, which is the image's default.
+With Docker: `docker build -t segue-hub hub/`, then run it with the variables above. The image
+listens on `0.0.0.0:8480`.
+
+## Client
+
+Needs Node 24 or later, which runs the TypeScript files directly, and the hub binary built as
+above (or its path in `SEGUE_HUB_BIN`). The demo and the tests start the hub themselves.
+
+```sh
+cd client
+npm install
+npm run demo        # an iPhone (Jellyfin API), a TV (Subsonic API) and a PC; the PC moves the music
+npm test
+npm run typecheck
+```
 
 ## Next steps
 
@@ -65,7 +74,7 @@ With Docker: `docker build -t segue .`, then run it with the variables above and
 2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`), as devices that
    can be seen but not commanded. That covers apps like Symfonium, which is closed source.
 3. A first real app, as player and controller. Feishin (TypeScript, open source) is the closest
-   fit for `src/client.ts`.
+   fit for `client/src/client.ts`.
 4. Propose it: an OpenSubsonic discussion (next to
    [#277](https://github.com/opensubsonic/open-subsonic-api/discussions/277)), Navidrome, and the
    open-source apps.

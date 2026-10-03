@@ -1,8 +1,8 @@
 # Segue protocol, version 1 (draft)
 
-Status: **draft 0**, 2026-10-03. Not proposed anywhere yet. The reference implementation is in
-this repository (`src/`); where this text and `src/protocol.ts` disagree, that is a bug in one of
-them.
+Status: **draft 0**, 2026-10-03. Not proposed anywhere yet. This repository has a reference hub
+(`hub/`, Go) and a reference client (`client/`, TypeScript). Where this text and their `protocol`
+files disagree, that is a bug in one of them.
 
 ## The problem
 
@@ -71,7 +71,8 @@ extension in `getOpenSubsonicExtensions` ([open questions](#11-open-questions)).
 
 ## 2. Connection and authentication
 
-A WebSocket carrying JSON text frames, one message per frame. Every message has a `type`. The
+A WebSocket carrying JSON text frames, one message per frame. Every message has a `type`. Times,
+positions and durations are integer milliseconds, and volume is an integer from 0 to 100. The
 device's first message is `hello`:
 
 ```json

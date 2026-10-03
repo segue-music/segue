@@ -1,0 +1,477 @@
+package hub
+
+import (
+	"cmp"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Options configures a Hub. Authenticate is required.
+type Options struct {
+	Authenticate Authenticator
+	// Translate expresses ids across APIs. Nil means they never are (NoTranslation).
+	Translate IDTranslator
+	// Logger defaults to discarding everything.
+	Logger *slog.Logger
+	// Now defaults to time.Now.
+	Now func() time.Time
+	// HelloTimeout is how long a new connection has to send its hello. Default 10 s.
+	HelloTimeout time.Duration
+	// CommandTimeout is how long to wait for a player to answer a command. Default 10 s.
+	CommandTimeout time.Duration
+	// OfflineTTL is how long an offline device, with its last state, stays listed. Default 24 h.
+	OfflineTTL time.Duration
+}
+
+// Conn is the hub's side of one connection. Send and Close must not block: the hub calls them
+// while holding its lock. Close sends a close frame after whatever was already sent.
+type Conn interface {
+	Send(msg any)
+	Close(code int, reason string)
+}
+
+// Hub keeps the devices of each user, relays their state to the user's other devices and routes
+// commands between them. It holds nothing on disk: after a restart, devices just reconnect.
+type Hub struct {
+	opts Options
+	log  *slog.Logger
+
+	mu      sync.Mutex
+	users   map[string]map[string]*entry // user → device id → device
+	pending map[string]*pending          // command id → command waiting for its answer
+}
+
+type entry struct {
+	user     string
+	info     DeviceInfo
+	conn     Conn // nil while offline
+	state    *StampedState
+	lastSeen time.Time
+}
+
+type outcome struct {
+	ok  bool
+	err string
+}
+
+type pending struct {
+	target *entry
+	done   chan outcome // buffered: finishing never blocks
+}
+
+func New(opts Options) *Hub {
+	if opts.Authenticate == nil {
+		panic("hub: Options.Authenticate is required")
+	}
+	if opts.Translate == nil {
+		opts.Translate = NoTranslation
+	}
+	if opts.Now == nil {
+		opts.Now = time.Now
+	}
+	opts.HelloTimeout = cmp.Or(opts.HelloTimeout, 10*time.Second)
+	opts.CommandTimeout = cmp.Or(opts.CommandTimeout, 10*time.Second)
+	opts.OfflineTTL = cmp.Or(opts.OfflineTTL, 24*time.Hour)
+	log := cmp.Or(opts.Logger, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return &Hub{opts: opts, log: log, users: map[string]map[string]*entry{}, pending: map[string]*pending{}}
+}
+
+// Session is one connection's life in the hub. The transport calls Message for each text frame,
+// from a single goroutine, and Closed once at the end, from that same goroutine.
+type Session struct {
+	hub        *Hub
+	conn       Conn
+	entry      *entry // after a successful hello
+	greeted    bool
+	helloTimer *time.Timer
+}
+
+func (h *Hub) Open(conn Conn) *Session {
+	return &Session{
+		hub:        h,
+		conn:       conn,
+		helloTimer: time.AfterFunc(h.opts.HelloTimeout, func() { conn.Close(CloseBadHello, "no hello") }),
+	}
+}
+
+func (s *Session) Message(ctx context.Context, raw []byte) {
+	var msg incoming
+	err := json.Unmarshal(raw, &msg)
+	if !s.greeted {
+		s.greeted = true
+		s.helloTimer.Stop()
+		if err != nil {
+			s.conn.Close(CloseBadHello, "malformed hello")
+			return
+		}
+		s.entry = s.hub.hello(ctx, s.conn, msg)
+		return
+	}
+	switch {
+	case s.entry == nil: // the hello failed and the connection is closing
+	case err != nil:
+		s.conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+	default:
+		s.hub.dispatch(s.entry, s.conn, msg)
+	}
+}
+
+func (s *Session) Closed() {
+	s.helloTimer.Stop()
+	if s.entry != nil {
+		s.hub.disconnect(s.entry, s.conn)
+	}
+}
+
+// Sweep forgets offline devices not seen for longer than OfflineTTL.
+func (h *Hub) Sweep() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	cutoff := h.opts.Now().Add(-h.opts.OfflineTTL)
+	for user, devices := range h.users {
+		for id, e := range devices {
+			if e.conn != nil || !e.lastSeen.Before(cutoff) {
+				continue
+			}
+			delete(devices, id)
+			h.broadcast(e, func(*entry) any { return goneMsg{Type: "gone", DeviceID: id} })
+		}
+		if len(devices) == 0 {
+			delete(h.users, user)
+		}
+	}
+}
+
+func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
+	if msg.Type != "hello" || msg.Protocol != ProtocolVersion {
+		conn.Close(CloseBadHello, fmt.Sprintf("expected a hello for protocol %d", ProtocolVersion))
+		return nil
+	}
+	auth, authOK := msg.Auth.clean()
+	info := msg.Device
+	if !authOK || !info.clean() {
+		conn.Close(CloseBadHello, "malformed hello")
+		return nil
+	}
+	user, ok, err := h.opts.Authenticate(ctx, auth)
+	if err != nil {
+		h.log.Warn("media server unreachable", "err", err)
+		conn.Close(CloseUnavailable, "media server unreachable")
+		return nil
+	}
+	if !ok || user == "" {
+		h.log.Info("credentials rejected", "device", info.Name, "client", info.Client)
+		conn.Close(CloseUnauthorized, "credentials rejected by the media server")
+		return nil
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	devices := h.devicesOf(user)
+	e := devices[info.ID]
+	var replaced Conn
+	if e == nil {
+		e = &entry{user: strings.ToLower(user)}
+		devices[info.ID] = e
+	} else {
+		replaced = e.conn
+	}
+	e.info, e.conn, e.lastSeen = info, conn, h.opts.Now()
+	if replaced != nil {
+		h.failPending(e, "offline")
+		replaced.Close(CloseReplaced, "the device connected again")
+	}
+
+	others := []Device{}
+	for _, other := range devices {
+		if other != e {
+			others = append(others, h.view(other, info.API))
+		}
+	}
+	slices.SortFunc(others, func(a, b Device) int { return strings.Compare(a.ID, b.ID) })
+	conn.Send(welcomeMsg{
+		Type: "welcome", Protocol: ProtocolVersion, User: user,
+		ServerTime: h.opts.Now().UnixMilli(), Devices: others,
+	})
+	h.announce(e)
+	h.log.Info("device connected", "user", user, "device", info.Name, "client", info.Client)
+	return e
+}
+
+func (h *Hub) disconnect(e *entry, conn Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if e.conn != conn {
+		return // a newer connection of the same device took over
+	}
+	e.conn, e.lastSeen = nil, h.opts.Now()
+	h.failPending(e, "offline")
+	h.announce(e)
+	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name)
+}
+
+func (h *Hub) dispatch(e *entry, conn Conn, msg incoming) {
+	h.mu.Lock()
+	current := e.conn == conn
+	h.mu.Unlock()
+	if !current {
+		return // late message on a connection that was replaced
+	}
+	switch msg.Type {
+	case "state":
+		h.onState(e, conn, msg)
+	case "command":
+		go h.onCommand(e, conn, msg) // waits for the player; the connection keeps reading meanwhile
+	case "transfer":
+		go h.onTransfer(e, conn, msg)
+	case "result":
+		h.onResult(e, msg)
+	default:
+		conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+	}
+}
+
+func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
+	report, ok := parseState(msg.State)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	switch {
+	case !e.info.isPlayer():
+		conn.Send(errorMsg{Type: "error", Error: "notPlayer"})
+		return
+	case !ok:
+		conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+		return
+	}
+	now := h.opts.Now()
+	if e.state == nil {
+		e.state = &StampedState{}
+	}
+	e.state.merge(report)
+	e.state.At, e.lastSeen = now.UnixMilli(), now
+	// Recipients merge the report into what they have, so relay only what the player sent.
+	relayed := StampedState{PlayerState: report, At: now.UnixMilli()}
+	h.broadcast(e, func(to *entry) any {
+		return stateMsg{Type: "state", DeviceID: e.info.ID, State: h.translateState(relayed, e.info.API, to.info.API)}
+	})
+}
+
+func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
+	if msg.ID == "" {
+		conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+		return
+	}
+	command, ok := parseCommand(msg.Command)
+	h.mu.Lock()
+	target := h.users[e.user][msg.Target]
+	fromAPI, from := e.info.API, e.info.ID
+	h.mu.Unlock()
+	var o outcome
+	switch {
+	case !ok:
+		o.err = "badMessage"
+	case target == nil:
+		o.err = "unknownDevice"
+	default:
+		o = h.request(target, command, fromAPI, from)
+	}
+	conn.Send(resultMsg{Type: "result", Re: msg.ID, OK: o.ok, Error: o.err})
+}
+
+// onTransfer hands the source's queue, at its current position, to the destination, then pauses
+// the source.
+func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
+	if msg.ID == "" {
+		conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+		return
+	}
+	reply := func(o outcome) { conn.Send(resultMsg{Type: "result", Re: msg.ID, OK: o.ok, Error: o.err}) }
+
+	h.mu.Lock()
+	devices := h.users[e.user]
+	source, destination := devices[msg.From], devices[msg.To]
+	from := e.info.ID
+	var handoff Command
+	var sourceAPI API
+	problem := ""
+	switch {
+	case source == nil || destination == nil:
+		problem = "unknownDevice"
+	case source == destination:
+		problem = "badMessage"
+	// An offline source still has its last state: the queue of a closed app can be picked up.
+	case source.state == nil || len(source.state.Queue) == 0:
+		problem = "nothingToTransfer"
+	default:
+		state := source.state
+		index := 0
+		if state.Index != nil {
+			index = *state.Index
+		}
+		position := state.positionAt(h.opts.Now().UnixMilli())
+		play := msg.Play == nil || *msg.Play
+		handoff = Command{Action: ActSetQueue, Queue: state.Queue, Index: &index, PositionMs: &position, Play: &play}
+		sourceAPI = source.info.API
+	}
+	h.mu.Unlock()
+	if problem != "" {
+		reply(outcome{err: problem})
+		return
+	}
+
+	o := h.request(destination, handoff, sourceAPI, from)
+	if o.ok {
+		h.mu.Lock()
+		playing := source.conn != nil && source.state.Status == Playing
+		h.mu.Unlock()
+		if playing {
+			// Best effort: the music has already moved, so a source that won't pause doesn't undo it.
+			h.request(source, Command{Action: ActPause}, sourceAPI, from)
+		}
+	}
+	reply(o)
+}
+
+func (h *Hub) onResult(e *entry, msg incoming) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	p := h.pending[msg.Re]
+	if p == nil || p.target != e {
+		return // late, or not this device's to answer
+	}
+	o := outcome{ok: msg.OK}
+	if !msg.OK {
+		o.err = cmp.Or(msg.Error, "failed")
+	}
+	h.finish(msg.Re, o)
+}
+
+// request sends a command to a player and waits for its answer. fromAPI is the id space of the
+// command's queue, if any.
+func (h *Hub) request(target *entry, command Command, fromAPI API, from string) outcome {
+	h.mu.Lock()
+	switch {
+	case target.conn == nil:
+		h.mu.Unlock()
+		return outcome{err: "offline"}
+	case !target.info.isPlayer():
+		h.mu.Unlock()
+		return outcome{err: "notPlayer"}
+	case !target.info.obeys(command.Action):
+		h.mu.Unlock()
+		return outcome{err: "unsupported"}
+	}
+	if command.Action == ActSetQueue {
+		command.Queue = h.translateQueue(command.Queue, fromAPI, target.info.API)
+	}
+	id := newID()
+	p := &pending{target: target, done: make(chan outcome, 1)}
+	h.pending[id] = p
+	target.conn.Send(commandMsg{Type: "command", ID: id, From: from, Command: command})
+	h.mu.Unlock()
+
+	timer := time.NewTimer(h.opts.CommandTimeout)
+	defer timer.Stop()
+	select {
+	case o := <-p.done:
+		return o
+	case <-timer.C:
+		h.mu.Lock()
+		_, waiting := h.pending[id]
+		delete(h.pending, id)
+		h.mu.Unlock()
+		if !waiting {
+			return <-p.done // the answer arrived just as time ran out
+		}
+		return outcome{err: "timeout"}
+	}
+}
+
+// finish resolves a pending command. Call with h.mu held.
+func (h *Hub) finish(id string, o outcome) {
+	if p := h.pending[id]; p != nil {
+		delete(h.pending, id)
+		p.done <- o
+	}
+}
+
+// failPending resolves every command waiting on a device. Call with h.mu held.
+func (h *Hub) failPending(e *entry, err string) {
+	for id, p := range h.pending {
+		if p.target == e {
+			h.finish(id, outcome{err: err})
+		}
+	}
+}
+
+// devicesOf returns (creating it if needed) a user's devices. Call with h.mu held.
+func (h *Hub) devicesOf(user string) map[string]*entry {
+	key := strings.ToLower(user)
+	devices := h.users[key]
+	if devices == nil {
+		devices = map[string]*entry{}
+		h.users[key] = devices
+	}
+	return devices
+}
+
+// announce tells the device's siblings about its info, presence and full state. Call with h.mu held.
+func (h *Hub) announce(e *entry) {
+	h.broadcast(e, func(to *entry) any { return deviceMsg{Type: "device", Device: h.view(e, to.info.API)} })
+}
+
+// broadcast sends to every other connected device of the same user, built for each recipient (whose
+// API may differ). Call with h.mu held.
+func (h *Hub) broadcast(source *entry, build func(to *entry) any) {
+	for _, to := range h.users[source.user] {
+		if to != source && to.conn != nil {
+			to.conn.Send(build(to))
+		}
+	}
+}
+
+// view is a device as seen by a device that speaks api. Call with h.mu held.
+func (h *Hub) view(e *entry, api API) Device {
+	d := Device{DeviceInfo: e.info, Online: e.conn != nil}
+	if e.state != nil {
+		state := h.translateState(*e.state, e.info.API, api)
+		d.State = &state
+	}
+	return d
+}
+
+func (h *Hub) translateState(state StampedState, from, to API) StampedState {
+	if state.Queue != nil {
+		state.Queue = h.translateQueue(state.Queue, from, to)
+	}
+	return state
+}
+
+func (h *Hub) translateQueue(queue []QueueItem, from, to API) []QueueItem {
+	if from == to {
+		return queue
+	}
+	out := make([]QueueItem, len(queue))
+	for i, item := range queue {
+		if item.ID != "" {
+			item.ID, _ = h.opts.Translate(item.ID, from, to) // "" when it can't: metadata only
+		}
+		out[i] = item
+	}
+	return out
+}
+
+func newID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}

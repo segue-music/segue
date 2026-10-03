@@ -1,14 +1,13 @@
 {
-  "name": "segue",
+  "name": "segue-client",
   "version": "0.0.0",
   "private": true,
-  "description": "Draft of an open \"Connect\" protocol for OpenSubsonic and Jellyfin players, with a reference hub",
+  "description": "Reference client of the Segue protocol (TypeScript), with a demo and interop tests against the Go hub",
   "type": "module",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "start": "node src/main.ts",
     "demo": "node examples/demo.ts",
     "test": "node --test \"test/**/*.test.ts\"",
     "typecheck": "tsc"

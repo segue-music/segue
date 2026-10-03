@@ -1,18 +1,15 @@
-// Starts a hub, an iPhone playing through the Jellyfin API, a TV on the Subsonic API and a PC that
-// only controls; the PC moves the music from the iPhone to the TV. Run with `npm run demo`.
-import { devAuthenticator } from "../src/auth.ts";
+// Starts the Go hub, an iPhone playing through the Jellyfin API, a TV on the Subsonic API and a PC
+// that only controls; the PC moves the music from the iPhone to the TV. Run with `npm run demo`,
+// after building the hub (README.md).
 import { SegueClient } from "../src/client.ts";
-import { Hub } from "../src/hub.ts";
-import { navidromeIds } from "../src/ids.ts";
-import { listen } from "../src/server.ts";
 import { FakePlayer } from "./fake-player.ts";
+import { startHub } from "./hub-process.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const seconds = (ms = 0) => `${(ms / 1000).toFixed(1)}s`;
 
-const hub = new Hub({ authenticate: devAuthenticator, translate: navidromeIds, log: (line) => console.log(`  [hub] ${line}`) });
-const server = await listen(hub, { host: "127.0.0.1", port: 0, info: { server: "navidrome" } });
-const url = `${server.url.replace(/^http/, "ws")}/v1/ws`;
+const hub = await startHub({ log: (line) => console.log(`  [hub] ${line.replace(/^time=\S+ /, "")}`) });
+const url = hub.url;
 
 const iphone = new FakePlayer({ url, id: "iphone", name: "iPhone (Jellify)", api: "jellyfin" });
 const tv = new FakePlayer({ url, id: "tv", name: "Living room TV (Symfonium)", api: "subsonic" });
@@ -50,4 +47,4 @@ show("After the transfer");
 console.log(`\nThe TV got Subsonic ids: ${tv.queue.map((item) => item.id).join(", ")}`);
 
 for (const client of [iphone.client, tv.client, pc]) client.close();
-await server.close();
+await hub.stop();
