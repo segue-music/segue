@@ -124,6 +124,34 @@ void main() {
     expect(phone.client.positionMs('laptop'), greaterThanOrEqualTo(10000));
   });
 
+  test('an app with nothing playing shows, and controls, what plays on another device', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    final phone = await App(user, 'phone').start();
+    await laptop.player.playQueue(songs);
+    await until(() => phone.connect.nowPlaying?.device == 'laptop', 'the phone to follow the laptop');
+    expect(phone.connect.nowPlaying?.title, 'Dream On');
+    expect(phone.connect.nowPlaying?.playing, isTrue);
+    expect(phone.connect.playingId, 'laptop');
+    expect((await phone.connect.toggle()).ok, isTrue);
+    expect(laptop.player.playing, isFalse);
+    await until(() => phone.connect.nowPlaying?.playing == false, 'the phone to see the pause');
+    expect(phone.connect.nowPlaying?.device, 'laptop', reason: 'a paused device stays on the bar');
+  });
+
+  test('when another device starts playing, every app follows it', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    final phone = await App(user, 'phone').start();
+    await phone.player.playQueue(songs);
+    await until(() => laptop.connect.nowPlaying?.device == 'phone', 'the laptop to follow the phone');
+    await phone.player.toggle();
+    await laptop.player.playQueue(songs, index: 1);
+    expect(laptop.connect.nowPlaying?.device, isNull, reason: 'the laptop plays itself');
+    await until(() => phone.connect.nowPlaying?.device == 'laptop', 'the phone to follow the laptop');
+    expect(phone.connect.nowPlaying?.title, 'Other');
+  });
+
   test('the Spotify flow: control another device, then move the music here', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();

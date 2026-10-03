@@ -41,7 +41,7 @@ class _DevicesSheet extends StatelessWidget {
             leading: const Icon(Icons.computer),
             title: Text('Este aparelho (${services.session.deviceName})'),
             selected: connect.activeId == null,
-            trailing: connect.activeId == null ? const Icon(Icons.check) : null,
+            trailing: _marks(playing: connect.player.playing, active: connect.activeId == null),
             onTap: () => act(() => connect.switchTo(null)),
           ),
           if (client == null)
@@ -57,11 +57,20 @@ class _DevicesSheet extends StatelessWidget {
               title: Text(device.info.name),
               subtitle: Text(_describe(device)),
               selected: connect.activeId == device.id,
-              trailing: connect.activeId == device.id ? const Icon(Icons.check) : null,
+              trailing: _marks(playing: connect.playingId == device.id, active: connect.activeId == device.id),
               onTap: () => act(() => device.online ? connect.switchTo(device.id) : connect.continueFrom(device.id)),
             ),
         ],
       ),
+    );
+  }
+
+  /// Which device plays (equalizer) and which one the app controls (check).
+  static Widget? _marks({required bool playing, required bool active}) {
+    if (!playing && !active) return null;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [if (playing) const Icon(Icons.graphic_eq), if (active) const Icon(Icons.check)],
     );
   }
 

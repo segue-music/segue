@@ -81,12 +81,7 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(now.title ?? 'Nada tocando', maxLines: 1, overflow: TextOverflow.ellipsis),
-                            Text(
-                              now.device == null ? (now.artist ?? '') : 'Tocando em ${now.device}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: now.device == null ? null : colors.primary),
-                            ),
+                            Text(now.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
                           ],
                         ),
                       ),
@@ -114,6 +109,23 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
                     ],
                   ),
                 ),
+                // Where it plays, when that's another device, as Spotify's strip under the player.
+                if (now.device != null)
+                  Container(
+                    width: double.infinity,
+                    color: colors.primaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.speaker, size: 16, color: colors.onPrimaryContainer),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${now.playing ? 'Tocando' : 'Pausado'} em ${now.device}',
+                          style: TextStyle(color: colors.onPrimaryContainer, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),

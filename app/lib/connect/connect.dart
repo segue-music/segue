@@ -29,13 +29,14 @@ class NowPlaying {
 }
 
 /// Spotify's model: the app controls one device at a time, this one or another, and everything you
-/// press (play an album, pause, skip) goes to it. Picking another device moves the music there.
+/// press (play an album, pause, skip) goes to it. Picking another device moves the music there, and
+/// when any device starts playing, every app follows it.
 class ConnectController extends ChangeNotifier {
   ConnectController({required this.player, this.client}) {
-    player.addListener(notifyListeners);
+    player.addListener(_update);
     final hub = client;
     if (hub == null) return;
-    hub.addListener(_hubChanged);
+    hub.addListener(_update);
     hub.onCommand = (command, from) => player.obey(command);
     hub.onConnected = () => hub.sendState(player.report(full: true));
     player.onReport = hub.sendState;
@@ -48,8 +49,16 @@ class ConnectController extends ChangeNotifier {
 
   String? _active;
 
+  /// The device playing at the last update: [_here], another device's id, or null for none. A
+  /// change means a device started playing, and the app follows it.
+  String? _playing;
+  static const _here = ''; // the hub never gives a device an empty id
+
   /// The device the app controls; null is this one.
   String? get activeId => _active;
+
+  /// The device playing now, or null for none (or this one).
+  String? get playingId => _playing == _here ? null : _playing;
 
   Device? get activeDevice => _active == null ? null : client?.devices[_active];
 
@@ -137,15 +146,31 @@ class ConnectController extends ChangeNotifier {
     }
   }
 
-  void _hubChanged() {
-    if (_active != null && client!.devices[_active] == null) _active = null; // that device is gone
+  void _update() {
+    final playing = _whoIsPlaying();
+    if (playing != null && playing != _playing) _active = playing == _here ? null : playing;
+    _playing = playing;
+    final active = _active;
+    if (active != null && !(client?.devices[active]?.online ?? false)) _active = null; // gone or offline
     notifyListeners();
+  }
+
+  /// This device if it plays; otherwise the other device that reported playing most recently.
+  String? _whoIsPlaying() {
+    if (player.playing) return _here;
+    Device? latest;
+    for (final device in client?.devices.values ?? const <Device>[]) {
+      final state = device.state;
+      if (!device.online || state?.status != PlaybackStatus.playing) continue;
+      if (latest == null || state!.at > latest.state!.at) latest = device;
+    }
+    return latest?.id;
   }
 
   @override
   void dispose() {
-    player.removeListener(notifyListeners);
-    client?.removeListener(_hubChanged);
+    player.removeListener(_update);
+    client?.removeListener(_update);
     super.dispose();
   }
 }

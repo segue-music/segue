@@ -15,7 +15,7 @@ const appVersion = '0.1.0';
 
 /// Everything a signed-in session runs on.
 class Services {
-  Services._(this.session, this.api, this.player, this.connect);
+  Services(this.session, this.api, this.player, this.connect);
 
   /// Starts a session: the API, this device's player and, if a hub is found, the connection to it.
   static Future<Services> start(Session session, {AudioEngine? engine}) async {
@@ -41,7 +41,7 @@ class Services {
               capabilities: CommandAction.values,
             ),
           );
-    final services = Services._(session, api, player, ConnectController(player: player, client: client));
+    final services = Services(session, api, player, ConnectController(player: player, client: client));
     unawaited(client?.start());
     return services;
   }
