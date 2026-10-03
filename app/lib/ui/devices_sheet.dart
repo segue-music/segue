@@ -1,0 +1,78 @@
+import 'package:flutter/material.dart';
+
+import '../segue/protocol.dart';
+import '../services.dart';
+
+/// Spotify's "Connect to a device": pick where the music plays.
+Future<void> showDevicesSheet(BuildContext context) =>
+    showModalBottomSheet<void>(context: context, showDragHandle: true, builder: (_) => const _DevicesSheet());
+
+class _DevicesSheet extends StatelessWidget {
+  const _DevicesSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final services = ServicesScope.of(context);
+    final connect = services.connect;
+    final client = connect.client;
+
+    Future<void> act(Future<Result> Function() action) async {
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+      final result = await action();
+      if (result.ok) {
+        navigator.pop();
+      } else {
+        messenger.showSnackBar(SnackBar(content: Text('Não deu: ${result.error}')));
+      }
+    }
+
+    return ListenableBuilder(
+      listenable: connect,
+      builder: (context, _) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(bottom: 16),
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text('Conectar a um aparelho', style: Theme.of(context).textTheme.titleLarge),
+          ),
+          ListTile(
+            leading: const Icon(Icons.computer),
+            title: Text('Este aparelho (${services.session.deviceName})'),
+            selected: connect.activeId == null,
+            trailing: connect.activeId == null ? const Icon(Icons.check) : null,
+            onTap: () => act(() => connect.switchTo(null)),
+          ),
+          if (client == null)
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Nenhum hub encontrado'),
+              subtitle: Text('Sem o hub em ${services.session.server.host}, só dá para tocar aqui.'),
+            ),
+          for (final device in connect.devices)
+            ListTile(
+              enabled: device.online || (device.state?.queue?.isNotEmpty ?? false),
+              leading: Icon(device.online ? Icons.speaker : Icons.speaker_outlined),
+              title: Text(device.info.name),
+              subtitle: Text(_describe(device)),
+              selected: connect.activeId == device.id,
+              trailing: connect.activeId == device.id ? const Icon(Icons.check) : null,
+              onTap: () => act(() => device.online ? connect.switchTo(device.id) : connect.continueFrom(device.id)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _describe(Device device) {
+    final item = device.state?.current;
+    final what = item == null ? null : [item.title, item.artist].nonNulls.join(' · ');
+    if (!device.online) return what == null ? 'Offline' : 'Offline · toque para continuar daqui: $what';
+    return switch (device.state?.status) {
+      PlaybackStatus.playing => 'Tocando: $what',
+      PlaybackStatus.paused => 'Pausado: $what',
+      _ => device.info.client,
+    };
+  }
+}

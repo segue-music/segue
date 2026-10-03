@@ -1,0 +1,92 @@
+import 'package:flutter/material.dart';
+
+import 'services.dart';
+import 'session.dart';
+import 'ui/home_page.dart';
+import 'ui/login_page.dart';
+
+class SegueApp extends StatefulWidget {
+  const SegueApp({required this.session, super.key});
+
+  /// The saved session, if any: then the app opens straight on the library.
+  final Session? session;
+
+  @override
+  State<SegueApp> createState() => _SegueAppState();
+}
+
+class _SegueAppState extends State<SegueApp> {
+  Services? _services;
+  bool _starting = false;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final session = widget.session;
+    if (session != null) _start(session);
+  }
+
+  Future<void> _start(Session session) async {
+    setState(() {
+      _starting = true;
+      _error = null;
+    });
+    try {
+      final services = await Services.start(session);
+      if (!mounted) {
+        await services.dispose();
+        return;
+      }
+      setState(() => _services = services);
+    } on Exception catch (e) {
+      if (mounted) setState(() => _error = e);
+    } finally {
+      if (mounted) setState(() => _starting = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    final services = _services;
+    setState(() {
+      _services = null;
+      _error = null;
+    });
+    await services?.dispose();
+    await Session.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final services = _services;
+    return MaterialApp(
+      title: 'Segue',
+      debugShowCheckedModeBanner: false,
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      // Above the navigator, so that every page and sheet sees the services.
+      builder: services == null ? null : (context, child) => ServicesScope(services: services, child: child!),
+      home: services != null
+          ? HomePage(onSignOut: _signOut)
+          : _starting
+          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+          : _error != null
+          ? Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Erro ao abrir: $_error'),
+                    TextButton(onPressed: _signOut, child: const Text('Sair')),
+                  ],
+                ),
+              ),
+            )
+          : LoginPage(onSignedIn: _start),
+    );
+  }
+}
+
+ThemeData _theme(Brightness brightness) => ThemeData(
+  colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: brightness),
+);

@@ -11,8 +11,9 @@ signs devices in with the credentials they already use with the media server, ke
 each player, and routes commands. Audio still comes from the media server. The problem, the design
 and the messages are in [SPEC.md](SPEC.md).
 
-**Status: skeleton.** The protocol is a first draft. The hub works in its tests and with the
-pretend players of the demo. No real app speaks it yet.
+**Status: skeleton.** The protocol is a first draft. The hub works in its tests, with the pretend
+players of the demo, and with the skeleton of an app of its own (`app/`), which is the first real
+client.
 
 ## Layout
 
@@ -21,6 +22,7 @@ pretend players of the demo. No real app speaks it yet.
 | `SPEC.md` | The protocol |
 | `hub/` | The reference hub, in Go. Package `hub` (usable as a library), binary in `cmd/segue-hub` |
 | `client/` | The reference client, in TypeScript, plus a pretend player, a demo, and tests that run it against the hub |
+| `app/` | A Spotify-like player for Navidrome built on Segue, in Flutter (Linux, Windows, macOS, Android, iOS). See [app/README.md](app/README.md) |
 
 The hub is in Go, the language of Navidrome, so that it can move into a media server. It also
 uses the same WebSocket library as Navidrome (`gorilla/websocket`). As a separate service it is
