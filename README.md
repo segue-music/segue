@@ -57,7 +57,7 @@ listens on `0.0.0.0:8480`.
 
 ## Next steps
 
-1. The app: search, artists, playlists, a full-screen player, and the Android build (see
+1. The app: artists, playlists, a full-screen player, and the Android build (see
    [app/README.md](app/README.md)).
 2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`), as devices that
    can be seen but not commanded. That covers apps like Symfonium, which is closed source.

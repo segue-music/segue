@@ -53,3 +53,6 @@ class Song {
   QueueItem toQueueItem() =>
       QueueItem(id: id, title: title, artist: artist, album: album, durationMs: duration?.inMilliseconds);
 }
+
+/// What a search found.
+typedef SearchResults = ({List<Album> albums, List<Song> songs});

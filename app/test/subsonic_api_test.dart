@@ -90,4 +90,43 @@ void main() {
     expect(songs.single.duration, const Duration(seconds: 268));
     expect(songs.single.toQueueItem().durationMs, 268000);
   });
+
+  test('search asks for albums and songs, no artists', () async {
+    late Uri asked;
+    final api = SubsonicApi(
+      Uri.parse('https://music.test'),
+      credentials,
+      client: MockClient((request) async {
+        asked = request.url;
+        return subsonic({
+          'status': 'ok',
+          'searchResult3': {
+            'album': [
+              {'id': 'a1', 'name': 'Aerosmith', 'artist': 'Aerosmith'},
+            ],
+            'song': [
+              {'id': 's1', 'title': 'Dream On', 'artist': 'Aerosmith', 'album': 'Aerosmith', 'coverArt': 'mf-s1'},
+            ],
+          },
+        });
+      }),
+    );
+    final (:albums, :songs) = await api.search('dream on');
+    expect(asked.path, '/rest/search3.view');
+    expect(asked.queryParameters, containsPair('query', 'dream on'));
+    expect(asked.queryParameters, containsPair('artistCount', '0'));
+    expect(albums.single.id, 'a1');
+    expect(songs.single.coverArt, 'mf-s1');
+  });
+
+  test('a search that finds nothing', () async {
+    final api = SubsonicApi(
+      Uri.parse('https://music.test'),
+      credentials,
+      client: MockClient((_) async => subsonic({'status': 'ok', 'searchResult3': <String, Object?>{}})),
+    );
+    final (:albums, :songs) = await api.search('zzz');
+    expect(albums, isEmpty);
+    expect(songs, isEmpty);
+  });
 }

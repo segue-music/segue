@@ -7,7 +7,8 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
 **Status: skeleton.** It does:
 - signing in with the media server's own account, with the password kept as a Subsonic token in
   the system's secure storage;
-- an album grid (newest first), the album page, and playback through media_kit (libmpv);
+- an album grid (newest first), the album page, search (albums and songs, by name, title or
+  artist), and playback through media_kit (libmpv);
 - Connect: the hub is found next to the server (or typed in), and the device picker lists the
   user's other devices with what they play. Picking one makes the app control it (play, pause,
   skip, play an album there). Picking this device again moves the music here, at the same point.
@@ -17,7 +18,7 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   desktop's player widget and KDE Connect show and command what the now-playing bar shows, the
   device it follows included.
 
-Not yet: search, artists, playlists, a full-screen player, the media controls on the other
+Not yet: artists, playlists, a full-screen player, the media controls on the other
 platforms (Android's media session, iOS's Now Playing), an offline cache, settings, and the
 Android and iOS builds.
 
@@ -25,11 +26,11 @@ Android and iOS builds.
 
 | Folder | What |
 |---|---|
-| `lib/subsonic/` | The Subsonic API: token sign-in, albums, songs, stream and cover URLs |
+| `lib/subsonic/` | The Subsonic API: token sign-in, albums, songs, search, stream and cover URLs |
 | `lib/segue/` | The Segue protocol in Dart, the hub client (reconnects by itself) and hub discovery |
 | `lib/player/` | `PlayerController` (queue, commands, state reports) over an `AudioEngine`; `MediaKitEngine` is the real one. `MediaControls`: the system's media controls |
 | `lib/connect/` | `ConnectController`: which device the app controls, and moving the music between devices |
-| `lib/ui/` | The pages: sign-in, albums, album, now-playing bar, device picker |
+| `lib/ui/` | The pages: sign-in, albums, album, search, now-playing bar, device picker |
 | `test/` | Unit and widget tests, and tests against the real Go hub (`hub_test.dart`) |
 | `tool/` | A Docker image and script to build and test without installing Flutter |
 

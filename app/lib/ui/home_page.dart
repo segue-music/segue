@@ -8,6 +8,7 @@ import 'album_page.dart';
 import 'cover.dart';
 import 'devices_sheet.dart';
 import 'now_playing_bar.dart';
+import 'search_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({required this.onSignOut, super.key});
@@ -34,6 +35,11 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('Álbuns'),
         actions: [
+          IconButton(
+            tooltip: 'Buscar',
+            icon: const Icon(Icons.search),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SearchPage())),
+          ),
           _HubStatus(client: services.connect.client),
           IconButton(tooltip: 'Aparelhos', icon: const Icon(Icons.devices), onPressed: () => showDevicesSheet(context)),
           IconButton(tooltip: 'Sair', icon: const Icon(Icons.logout), onPressed: widget.onSignOut),

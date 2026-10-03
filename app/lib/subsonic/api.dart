@@ -66,6 +66,21 @@ class SubsonicApi {
     return (Album.fromJson(json), [for (final song in songs) Song.fromJson(song as Map<String, dynamic>)]);
   }
 
+  /// Albums and songs whose name, title or artist matches [query] (search3).
+  Future<SearchResults> search(String query, {int albums = 10, int songs = 50}) async {
+    final body = await _get('search3', {
+      'query': query,
+      'artistCount': '0',
+      'albumCount': '$albums',
+      'songCount': '$songs',
+    });
+    final result = body['searchResult3'] as Map<String, dynamic>? ?? const {};
+    return (
+      albums: [for (final album in result['album'] as List? ?? const []) Album.fromJson(album as Map<String, dynamic>)],
+      songs: [for (final song in result['song'] as List? ?? const []) Song.fromJson(song as Map<String, dynamic>)],
+    );
+  }
+
   Uri streamUrl(String songId) => _url('stream', {'id': songId});
 
   Uri coverArtUrl(String id, {int size = 300}) => _url('getCoverArt', {'id': id, 'size': '$size'});
