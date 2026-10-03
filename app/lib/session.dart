@@ -49,8 +49,8 @@ class Session {
     return Session(
       server: Uri.parse(server),
       credentials: SubsonicCredentials(username: username, token: token, salt: salt),
-      deviceId: _env('SEGUE_DEVICE_ID') ?? await deviceIdOfThisInstallation(),
-      deviceName: _env('SEGUE_DEVICE_NAME') ?? await _prefs.getString('deviceName') ?? defaultDeviceName(),
+      deviceId: await thisDeviceId(),
+      deviceName: await thisDeviceName(),
       hub: hub == null ? null : Uri.parse(hub),
     );
   }
@@ -58,7 +58,6 @@ class Session {
   Future<void> save() async {
     await _prefs.setString('server', server.toString());
     await _prefs.setString('username', credentials.username);
-    await _prefs.setString('deviceName', deviceName);
     if (hub == null) {
       await _prefs.remove('hub');
     } else {
@@ -75,7 +74,13 @@ class Session {
     await _prefs.remove('username');
   }
 
-  static Future<String> deviceIdOfThisInstallation() async {
+  // SEGUE_DEVICE_ID and SEGUE_DEVICE_NAME let a second copy of the app on the same computer, with
+  // the same login, be another device: for trying Connect out. They are never saved.
+
+  /// The id the hub knows this device by: one per installation, generated the first time.
+  static Future<String> thisDeviceId() async {
+    final fromEnv = Platform.environment['SEGUE_DEVICE_ID'];
+    if (fromEnv != null) return fromEnv;
     final existing = await _prefs.getString('deviceId');
     if (existing != null) return existing;
     final id = const Uuid().v4();
@@ -83,9 +88,8 @@ class Session {
     return id;
   }
 
-  /// SEGUE_DEVICE_ID and SEGUE_DEVICE_NAME let two copies of the app on one computer be two
-  /// devices, for trying Connect out.
-  static String? _env(String name) => Platform.environment[name];
+  static Future<String> thisDeviceName() async =>
+      Platform.environment['SEGUE_DEVICE_NAME'] ?? await _prefs.getString('deviceName') ?? defaultDeviceName();
 
   static String defaultDeviceName() {
     if (Platform.isAndroid) return 'Android';

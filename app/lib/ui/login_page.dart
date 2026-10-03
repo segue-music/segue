@@ -45,8 +45,8 @@ class _LoginPageState extends State<LoginPage> {
       final session = Session(
         server: server,
         credentials: credentials,
-        deviceId: await Session.deviceIdOfThisInstallation(),
-        deviceName: Session.defaultDeviceName(),
+        deviceId: await Session.thisDeviceId(),
+        deviceName: await Session.thisDeviceName(),
         hub: hub.isEmpty ? null : normalizeServer(hub),
       );
       try {
