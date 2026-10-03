@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services.dart';
 import '../subsonic/models.dart';
 import 'cover.dart';
+import 'errors.dart';
 import 'now_playing_bar.dart';
 
 class AlbumPage extends StatefulWidget {
@@ -26,7 +27,7 @@ class _AlbumPageState extends State<AlbumPage> {
   Future<void> _play(List<Song> songs, int index) async {
     final result = await ServicesScope.of(context).connect.playSongs(songs, index);
     if (!result.ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não deu para tocar: ${result.error}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(result.error))));
     }
   }
 

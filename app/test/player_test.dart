@@ -59,6 +59,19 @@ void main() {
     expect(player.status, PlaybackStatus.stopped);
   });
 
+  test('previous goes back to the start of the track, and to the previous one in its first seconds', () async {
+    await player.playQueue(songs, index: 1, position: const Duration(seconds: 40));
+    await player.previous();
+    expect(player.index, 1);
+    expect(player.position.inSeconds, 0);
+    await player.previous();
+    expect(player.index, 0);
+    await player.seek(const Duration(seconds: 1));
+    await player.previous(); // the first track: back to its start, never an error
+    expect(player.index, 0);
+    expect(player.position.inSeconds, 0);
+  });
+
   test('setQueue skips items without an id and keeps the current track current', () async {
     await player.obey(
       const Command.setQueue(

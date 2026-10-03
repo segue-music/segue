@@ -6,6 +6,7 @@ import '../segue/protocol.dart';
 import '../services.dart';
 import 'cover.dart';
 import 'devices_sheet.dart';
+import 'errors.dart';
 
 String formatDuration(Duration? duration) {
   if (duration == null) return '';
@@ -42,7 +43,7 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
   Future<void> _do(Future<Result> Function() action) async {
     final result = await action();
     if (!result.ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Não deu: ${result.error}')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(result.error))));
     }
   }
 

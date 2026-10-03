@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../segue/protocol.dart';
 import '../services.dart';
 
+import 'errors.dart';
+
 /// Spotify's "Connect to a device": pick where the music plays.
 Future<void> showDevicesSheet(BuildContext context) =>
     showModalBottomSheet<void>(context: context, showDragHandle: true, builder: (_) => const _DevicesSheet());
@@ -23,7 +25,7 @@ class _DevicesSheet extends StatelessWidget {
       if (result.ok) {
         navigator.pop();
       } else {
-        messenger.showSnackBar(SnackBar(content: Text('Não deu: ${result.error}')));
+        messenger.showSnackBar(SnackBar(content: Text(describeError(result.error))));
       }
     }
 

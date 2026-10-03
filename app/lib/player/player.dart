@@ -56,7 +56,14 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> next() => _jump(index + 1);
 
-  Future<void> previous() => _jump(index - 1);
+  /// Back to the start of the track; in its first seconds, to the previous one (SPEC.md, section 5).
+  Future<void> previous() async {
+    if (index == 0 || position > previousGrace) return seek(Duration.zero);
+    await _jump(index - 1);
+  }
+
+  /// Up to where "previous" goes to the previous track rather than to the start of this one.
+  static const previousGrace = Duration(seconds: 3);
 
   Future<void> seek(Duration position) async {
     await _engine.seek(position);

@@ -71,8 +71,11 @@ export class FakePlayer {
         this.#seek(0);
         break;
       case "next":
-      case "previous":
-        this.#jump(this.index + (command.action === "next" ? 1 : -1));
+        this.#jump(this.index + 1);
+        break;
+      case "previous": // back to the start of the track; in its first 3 s, to the previous one
+        if (this.index === 0 || this.positionMs > 3_000) this.#seek(0);
+        else this.#jump(this.index - 1);
         break;
       case "seek":
         this.#seek(command.positionMs);

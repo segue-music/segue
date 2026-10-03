@@ -90,7 +90,10 @@ test("commands reach the player, and its answer comes back", async () => {
   assert.equal(tv.status, "paused");
   assert.equal((await pc.command("tv", { action: "setVolume", volume: 30 })).ok, true);
   assert.equal(tv.volume, 30);
-  assert.equal((await pc.command("tv", { action: "previous" })).error, "no such track");
+  assert.equal((await pc.command("tv", { action: "previous" })).ok, true, "the first track: back to its start");
+  assert.equal(tv.index, 0);
+  await pc.command("tv", { action: "next" });
+  assert.equal((await pc.command("tv", { action: "next" })).error, "no such track");
   assert.equal((await tv.client.command("pc", { action: "play" })).error, "notPlayer");
 });
 

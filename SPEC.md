@@ -206,7 +206,8 @@ obeys and answers `{"type": "result", "re": "<hub id>", "ok": true}` (or `"ok": 
 | `action` | Fields | Effect |
 |---|---|---|
 | `play`, `pause`, `toggle`, `stop` | | |
-| `next`, `previous` | | |
+| `next` | | The next track |
+| `previous` | | Back to the start of the track; in its first 3 seconds, to the previous track. On the first track, always back to its start |
 | `seek` | `positionMs` | |
 | `setVolume` | `volume` (0–100) | |
 | `setQueue` | `queue`, `index`, `positionMs`, `play` | Replace the queue and go to `index` at `positionMs`, playing if `play` |
