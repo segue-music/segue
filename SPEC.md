@@ -1,8 +1,8 @@
 # Segue protocol, version 1 (draft)
 
 Status: **draft 0**, 2026-10-03. Not proposed anywhere yet. This repository has a reference hub
-(`hub/`, Go) and a reference client (`client/`, TypeScript). Where this text and their `protocol`
-files disagree, that is a bug in one of them.
+(`hub/`, Go) and the first client, an app (`app/`, Flutter). Where this text and their protocol
+code disagree, that is a bug in one of them.
 
 ## The problem
 
