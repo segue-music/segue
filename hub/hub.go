@@ -275,14 +275,31 @@ func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
 	if e.state == nil {
 		e.state = &StampedState{}
 	}
+	started := report.Status == Playing && e.state.Status != Playing
 	e.state.merge(report)
 	e.state.At, e.lastSeen = now.UnixMilli(), now
 	h.noteLastPlayback(e)
+	if started {
+		h.pauseOthers(e)
+	}
 	// Recipients merge the report into what they have, so relay only what the player sent.
 	relayed := StampedState{PlayerState: report, At: now.UnixMilli()}
 	h.broadcast(e, func(to *entry) any {
 		return stateMsg{Type: "state", DeviceID: e.info.ID, State: h.translateState(relayed, e.info.API, to.info.API)}
 	})
+}
+
+// pauseOthers keeps one device playing at a time (SPEC.md, section 4): the user's other players
+// that are playing get a pause, sent as from the device that started. Call with h.mu held; the
+// commands go out once it is released.
+func (h *Hub) pauseOthers(e *entry) {
+	for _, other := range h.users[e.user] {
+		if other == e || other.conn == nil || other.state == nil || other.state.Status != Playing {
+			continue
+		}
+		h.log.Info("one device at a time: pausing", "user", e.user, "device", other.info.Name, "for", e.info.Name)
+		go h.request(other, Command{Action: ActPause}, other.info.API, e.info.ID)
+	}
 }
 
 func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {

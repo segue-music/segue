@@ -191,6 +191,18 @@ void main() {
     expect(phone.player.queue, isEmpty);
   });
 
+  test('starting to play on one device pauses the others', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    final phone = await App(user, 'phone').start();
+    await laptop.player.playQueue(songs);
+    await until(() => phone.connect.playingId == 'laptop', 'the phone to see the laptop playing');
+    await phone.player.playQueue(songs, index: 1);
+    await until(() => !laptop.player.playing, 'the laptop to pause');
+    expect(phone.player.playing, isTrue);
+    await until(() => laptop.connect.nowPlaying?.device == 'phone', 'the laptop to follow the phone');
+  });
+
   test('the Spotify flow: control another device, then move the music here', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();

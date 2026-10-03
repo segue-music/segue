@@ -184,6 +184,11 @@ devices. Any device computes where playback is now as `positionMs + (hubNow - at
 where `hubNow` is the local time plus the offset measured at `welcome` (`serverTime` minus the local
 time). Nobody depends on device clocks being right.
 
+**One device plays at a time**, as with Spotify: when a player's report goes from not playing to
+`playing`, the hub sends `pause` to the user's other players that are playing, as a command from
+the device that started. Reports from a device that already plays (a new track, say) don't do it
+again. Every app then sees, and follows, the one device that plays.
+
 ## 5. Commands
 
 A controller sends:
@@ -299,7 +304,8 @@ The hub only routes messages, so other programs can register devices of their ow
   instance), where user names may not match.
 - Shuffle and repeat, in the state and as commands. Editing the queue (play next, add to queue)
   without replacing it.
-- Group playback ("Jam"): one queue, several devices listening.
+- Group playback ("Jam"): one queue, several devices listening. It would need a way out of "one
+  device plays at a time" (section 4) for the devices in the group.
 - Advertising the hub: an OpenSubsonic extension and a Jellyfin plugin, instead of the `/connect`
   probe.
 - Waking mobile apps with push notifications.

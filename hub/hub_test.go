@@ -538,3 +538,46 @@ func TestLastPlaybackFollowsWhoPlays(t *testing.T) {
 		t.Fatalf("last playback %+v", last)
 	}
 }
+
+func TestStartingToPlayPausesTheOthers(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	speaker, _ := join(t, url, as("alice"), info("speaker", Subsonic, player, everything...))
+	stateFrom := func(d *testDevice, id string) {
+		t.Helper()
+		for d.expect("state").DeviceID != id {
+		}
+	}
+	noCommand := func(d *testDevice) {
+		t.Helper()
+		deadline := time.After(200 * time.Millisecond)
+		for {
+			select {
+			case msg := <-d.msgs:
+				if msg.Type == "command" {
+					t.Fatalf("%v got %+v", d.ws.LocalAddr(), msg.Command)
+				}
+			case <-deadline:
+				return
+			}
+		}
+	}
+	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	speaker.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
+	stateFrom(tv, "phone")
+	stateFrom(tv, "speaker")
+
+	// The TV starts playing: the phone, which plays, is paused; the paused speaker is left alone.
+	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	msg := phone.expect("command")
+	if msg.Command.Action != ActPause || msg.From != "tv" {
+		t.Fatalf("the phone got %+v from %q", msg.Command, msg.From)
+	}
+	phone.send(map[string]any{"type": "result", "re": msg.ID, "ok": true})
+	noCommand(speaker)
+
+	// More reports from a device that already plays (a new track, say) pause nobody again.
+	tv.report(map[string]any{"status": "playing", "positionMs": 0, "index": 1})
+	noCommand(phone)
+}
