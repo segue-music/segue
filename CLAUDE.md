@@ -66,7 +66,7 @@ Test prerequisites:
   has libmpv; elsewhere these tests are skipped.
 
 Running two app instances on one machine as different devices:
-`env SEGUE_DEVICE_ID=second SEGUE_DEVICE_NAME=Segundo segue/segue`.
+`env SEGUE_DEVICE_ID=second SEGUE_DEVICE_NAME="Second copy" segue/segue`.
 
 ## Hub architecture
 
@@ -124,3 +124,6 @@ Running two app instances on one machine as different devices:
   body explaining the behaviour and why.
 - `app/README.md` lists what the app does and what it doesn't do yet, and the root `README.md` has
   "Next steps". Update both when a feature lands.
+- Docs, comments and tests stay generic: no names from a particular setup (machine or device names,
+  hostnames, server paths, the tooling of the server it is developed on). Use names like `laptop`,
+  `phone`, `tv` and `music.example`.

@@ -84,7 +84,7 @@ binary is static, so one built elsewhere (`../hub/segue-hub` on the server) runs
 To see two devices on one computer, start a second copy of the app as another device:
 
 ```sh
-env SEGUE_DEVICE_ID=second SEGUE_DEVICE_NAME=Segundo segue/segue
+env SEGUE_DEVICE_ID=second SEGUE_DEVICE_NAME="Second copy" segue/segue
 ```
 
 ## Building and testing without Flutter installed
