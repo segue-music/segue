@@ -249,7 +249,8 @@ the hub's own record, separate from the devices' states:
 - when the device that holds it goes offline, it lets go of it: its clock stops (the position
   becomes where playback had got to, and the status `paused`), and no device holds it until one
   plays. Coming back online doesn't give it back;
-- the reference hub can keep it on disk, so that it survives a restart.
+- the reference hub can keep it on disk, so that it survives a restart. A restart disconnects every
+  device, so after one no device holds it.
 
 `welcome` carries it, with the queue in the device's API, when there is one. `deviceId` is the
 device that holds it, empty when none does; `deviceName` says where it was played:

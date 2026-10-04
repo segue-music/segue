@@ -92,6 +92,10 @@ func New(opts Options) *Hub {
 	h.last = map[string]*lastPlayback{}
 	if opts.StatePath != "" {
 		h.store, h.last = openStore(opts.StatePath, log)
+		// No device is connected yet, so none holds a last playback (SPEC.md, section 7).
+		for _, last := range h.last {
+			last.DeviceID = ""
+		}
 	}
 	return h
 }

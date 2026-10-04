@@ -593,6 +593,21 @@ func TestLastPlaybackStaysWithAPausedDeviceThatIsOn(t *testing.T) {
 	}
 }
 
+func TestLastPlaybackHasNoHolderAfterARestart(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "last.json")
+	url, h := startHub(t, Options{StatePath: path})
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	tv.report(map[string]any{"status": "paused", "positionMs": 5000})
+	time.Sleep(50 * time.Millisecond)
+	h.Close()
+	url2, _ := startHub(t, Options{StatePath: path})
+	_, welcome := join(t, url2, as("alice"), info("phone", Subsonic, controller))
+	if last := welcome.LastPlayback; last == nil || last.DeviceID != "" || last.DeviceName != "tv" || last.State.PositionMs != 5000 {
+		t.Fatalf("last playback after a restart %+v", last)
+	}
+}
+
 func TestLastPlaybackFollowsWhoPlays(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
