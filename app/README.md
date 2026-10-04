@@ -19,7 +19,10 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
 
 - the system's media controls on Linux (MPRIS, through `audio_service`): media keys, the
   desktop's player widget and KDE Connect show and command what the now-playing bar shows, the
-  device it follows included.
+  device it follows included;
+- its icon (made by `tool/icons.dart` from `tool/icon.png`): Android's launcher icon, adaptive from
+  Android 8 on, the Android TV banner, and on Linux the window's icon and an entry in the
+  application menu.
 
 Not yet: playlists, the queue on screen, the media controls on the other
 platforms (Android's media session, iOS's Now Playing), an offline cache, settings, and the
@@ -35,7 +38,7 @@ iOS build. The Android build (phones and Android TV) has not been tried on a dev
 | `lib/connect/` | `ConnectController`: which device the app controls, and moving the music between devices |
 | `lib/ui/` | The pages: sign-in, albums, artists, album, artist, search, player bar and full-screen player, device picker |
 | `test/` | Unit and widget tests, and tests against the real Go hub (`hub_test.dart`) |
-| `tool/` | A Docker image and script to build and test without installing Flutter |
+| `tool/` | A Docker image and script to build and test without installing Flutter; `icons.dart` makes every icon from the artwork, `icon.png` |
 
 ## Running on Linux
 
@@ -50,6 +53,11 @@ sudo dnf install gtk3 libsecret mpv-libs
 tar xzf segue-linux-x64.tar.gz
 segue/segue
 ```
+
+`segue/install-desktop-entry.sh` puts Segue in the application menu, with its icon: it writes
+`~/.local/share/applications/io.github.mateusguilherme.segue.desktop`, pointing at the folder (run
+it again after moving the folder). On Wayland the window takes its icon from that file, so without
+it the window has a generic one.
 
 ### With Flutter installed
 
@@ -123,6 +131,10 @@ tool/flutter.sh test
 tool/flutter.sh build linux
 tool/package-linux.sh
 ```
+
+After changing the artwork (`tool/icon.png`), `DART=1 tool/flutter.sh run tool/icons.dart` makes
+the icons again. The rounded square's position in the artwork is measured at the top of
+`tool/icons.dart`, so a new artwork needs it measured again.
 
 For Android, a second image adds the JDK and the Android SDK and NDK to the first:
 

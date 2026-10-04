@@ -97,6 +97,13 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
+# The window's icon (runner/my_application.cc), and the script that puts it in the application menu.
+install(FILES "runner/resources/app_icon.png" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
+  COMPONENT Runtime)
+configure_file("install-desktop-entry.sh" "${PROJECT_BINARY_DIR}/install-desktop-entry.sh" @ONLY)
+install(PROGRAMS "${PROJECT_BINARY_DIR}/install-desktop-entry.sh" DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 

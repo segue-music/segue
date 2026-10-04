@@ -53,6 +53,7 @@ tool/flutter.sh test
 tool/flutter.sh test test/player_test.dart    # one file
 tool/flutter.sh test --plain-name 'a refused hello is a final HubClosed'
 tool/package-linux.sh                         # release build → build/segue-linux-x64.tar.gz
+DART=1 tool/flutter.sh run tool/icons.dart    # every icon (Android, TV banner, Linux) from tool/icon.png
 ```
 
 The Android build (phones and Android TV) uses a second image, with the JDK and Android SDK/NDK:
