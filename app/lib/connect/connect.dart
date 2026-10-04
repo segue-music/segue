@@ -7,11 +7,12 @@ import '../segue/client.dart';
 import '../segue/protocol.dart';
 import '../subsonic/models.dart';
 
-/// What the now-playing bar shows, wherever it plays.
+/// What plays, wherever it plays: what the now-playing bar shows, and which song the lists mark.
 class NowPlaying {
   const NowPlaying({
     required this.playing,
     required this.position,
+    this.songId,
     this.title,
     this.artist,
     this.album,
@@ -23,6 +24,10 @@ class NowPlaying {
     this.canRepeat = false,
     this.canShuffle = false,
   });
+
+  /// Its Subsonic id (the hub gives the app other devices' songs in its own API), or null when the
+  /// hub couldn't translate it.
+  final String? songId;
 
   final String? title;
   final String? artist;
@@ -93,6 +98,7 @@ class ConnectController extends ChangeNotifier {
       final song = player.current;
       if (song == null) return null;
       return NowPlaying(
+        songId: song.id,
         title: song.title,
         artist: song.artist,
         album: song.album,
@@ -109,6 +115,7 @@ class ConnectController extends ChangeNotifier {
     final state = device.state;
     final item = state?.current;
     return NowPlaying(
+      songId: item?.id,
       title: item?.title,
       artist: item?.artist,
       album: item?.album,

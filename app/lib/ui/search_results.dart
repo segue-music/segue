@@ -6,6 +6,7 @@ import 'album_page.dart';
 import 'artist_page.dart';
 import 'artists_view.dart';
 import 'cover.dart';
+import 'current_song.dart';
 import 'errors.dart';
 import 'now_playing_bar.dart';
 
@@ -55,16 +56,20 @@ class SearchResultsList extends StatelessWidget {
           if (songs.isNotEmpty) const _Heading('Músicas'),
           // As on the album page: the queue is the songs listed, from the one picked.
           for (final (i, song) in songs.indexed)
-            ListTile(
-              leading: _Thumbnail(song.coverArt),
-              title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(
-                [song.artist, song.album].nonNulls.join(' · '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            CurrentSong(
+              song,
+              builder: (context, current, playing) => ListTile(
+                selected: current,
+                leading: _Thumbnail(song.coverArt, playing: playing),
+                title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Text(
+                  [song.artist, song.album].nonNulls.join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Text(formatDuration(song.duration)),
+                onTap: () => _play(context, songs, i),
               ),
-              trailing: Text(formatDuration(song.duration)),
-              onTap: () => _play(context, songs, i),
             ),
         ],
       );
@@ -85,18 +90,35 @@ class _Heading extends StatelessWidget {
 }
 
 class _Thumbnail extends StatelessWidget {
-  const _Thumbnail(this.coverArt, {this.round = false});
+  const _Thumbnail(this.coverArt, {this.round = false, this.playing = false});
 
   final String? coverArt;
 
   /// An artist's: round, with a person for a placeholder.
   final bool round;
 
+  /// A song's that plays: the equalizer goes over it, on a veil.
+  final bool playing;
+
   @override
   Widget build(BuildContext context) => SizedBox.square(
     dimension: 48,
     child: round
         ? ClipOval(child: Cover(coverArt, size: 96, icon: Icons.person_outline))
-        : ClipRRect(borderRadius: BorderRadius.circular(4), child: Cover(coverArt, size: 96)),
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Cover(coverArt, size: 96),
+                // The primary color's light tone in either theme, which stands out on the dark veil.
+                if (playing)
+                  ColoredBox(
+                    color: Colors.black54,
+                    child: Icon(CurrentSong.icon, color: Theme.of(context).colorScheme.primaryFixedDim),
+                  ),
+              ],
+            ),
+          ),
   );
 }

@@ -13,6 +13,9 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   phone, a bar at the bottom; the album page; search (artists, albums and songs); and playback
   through media_kit (libmpv), with a seek bar, shuffle and repeat (the queue or the track), in the
   player bar and in a full-screen player that the song in the bar opens;
+- on the album page and in search, the current song (on whichever device the app controls) stands
+  out in the theme's color, with an equalizer in place of its number, or over its cover, while it
+  plays;
 - Connect: the hub is found next to the server (or typed in), and the device picker lists the
   user's other devices that are online, with what they play. Picking one makes the app control it
   (play, pause, skip, seek, shuffle, repeat, play an album there). Picking this device again moves the music here, at the

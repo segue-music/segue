@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services.dart';
 import '../subsonic/models.dart';
 import 'cover.dart';
+import 'current_song.dart';
 import 'errors.dart';
 import 'now_playing_bar.dart';
 
@@ -73,12 +74,19 @@ class _AlbumPageState extends State<AlbumPage> {
                 ),
               ),
               for (final (i, song) in songs.indexed)
-                ListTile(
-                  leading: SizedBox(width: 24, child: Text('${i + 1}', textAlign: TextAlign.end)),
-                  title: Text(song.title),
-                  subtitle: song.artist == album.artist ? null : Text(song.artist ?? ''),
-                  trailing: Text(formatDuration(song.duration)),
-                  onTap: () => _play(songs, i),
+                CurrentSong(
+                  song,
+                  builder: (context, current, playing) => ListTile(
+                    selected: current,
+                    leading: SizedBox(
+                      width: 24,
+                      child: playing ? const Icon(CurrentSong.icon) : Text('${i + 1}', textAlign: TextAlign.end),
+                    ),
+                    title: Text(song.title),
+                    subtitle: song.artist == album.artist ? null : Text(song.artist ?? ''),
+                    trailing: Text(formatDuration(song.duration)),
+                    onTap: () => _play(songs, i),
+                  ),
                 ),
             ],
           );
