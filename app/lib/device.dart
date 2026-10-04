@@ -18,8 +18,11 @@ Future<bool> isTelevision() async {
 /// On a TV, the focus always shows. Flutter starts Android as if it were touched, and shows the
 /// focus only after a key from a hardware keyboard; but a TV has no touch screen, and a remote's
 /// keys can come as a virtual keyboard's (adb's do), which Flutter doesn't count.
-Future<void> adaptToTelevision() async {
-  if (await isTelevision()) FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+/// Returns whether it is one.
+Future<bool> adaptToTelevision() async {
+  final television = await isTelevision();
+  if (television) FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+  return television;
 }
 
 /// The device's name, as its owner knows it: on Android, the one in the system settings, or else its

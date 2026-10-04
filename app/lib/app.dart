@@ -9,13 +9,16 @@ import 'ui/shortcuts.dart';
 import 'ui/theme.dart';
 
 class SegueApp extends StatefulWidget {
-  const SegueApp({required this.session, this.mediaControls, super.key});
+  const SegueApp({required this.session, this.mediaControls, this.television = false, super.key});
 
   /// The saved session, if any: then the app opens straight on the library.
   final Session? session;
 
   /// The system's media controls, where the platform has them.
   final MediaControls? mediaControls;
+
+  /// Whether it runs on a TV, driven by a remote's D-pad.
+  final bool television;
 
   @override
   State<SegueApp> createState() => _SegueAppState();
@@ -74,7 +77,10 @@ class _SegueAppState extends State<SegueApp> {
       darkTheme: segueTheme(Brightness.dark),
       // Above the navigator, so that every page and sheet sees the services and the shortcuts.
       builder: (context, child) {
-        final page = TextFieldArrowShortcuts(child: child!);
+        final page = DirectionalNavigation(
+          enabled: widget.television,
+          child: TextFieldArrowShortcuts(child: child!),
+        );
         if (services == null) return page;
         return ServicesScope(
           services: services,
