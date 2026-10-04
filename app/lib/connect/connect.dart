@@ -14,6 +14,7 @@ class NowPlaying {
     required this.position,
     this.title,
     this.artist,
+    this.album,
     this.coverArt,
     this.duration,
     this.device,
@@ -25,6 +26,7 @@ class NowPlaying {
 
   final String? title;
   final String? artist;
+  final String? album;
   final String? coverArt;
   final bool playing;
   final Duration position;
@@ -93,6 +95,7 @@ class ConnectController extends ChangeNotifier {
       return NowPlaying(
         title: song.title,
         artist: song.artist,
+        album: song.album,
         coverArt: song.coverArt,
         playing: player.playing,
         position: player.position,
@@ -108,6 +111,7 @@ class ConnectController extends ChangeNotifier {
     return NowPlaying(
       title: item?.title,
       artist: item?.artist,
+      album: item?.album,
       coverArt: item?.id,
       playing: state?.status == PlaybackStatus.playing,
       position: Duration(milliseconds: client!.positionMs(device.id) ?? 0),

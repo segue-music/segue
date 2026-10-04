@@ -1,89 +1,25 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
-import '../segue/protocol.dart';
-import '../services.dart';
 import 'cover.dart';
 import 'devices_sheet.dart';
-import 'errors.dart';
+import 'player_controls.dart';
+import 'player_page.dart';
 
-String formatDuration(Duration? duration) {
-  if (duration == null) return '';
-  final seconds = duration.inSeconds;
-  return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
-}
+export 'player_controls.dart' show formatDuration;
 
-/// What plays, wherever it plays, with the controls and the device picker.
-class NowPlayingBar extends StatefulWidget {
+/// What plays, wherever it plays, with the controls and the device picker. The song opens the
+/// full-screen player.
+class NowPlayingBar extends StatelessWidget {
   const NowPlayingBar({super.key});
 
   @override
-  State<NowPlayingBar> createState() => _NowPlayingBarState();
-}
-
-class _NowPlayingBarState extends State<NowPlayingBar> {
-  late final Timer _tick;
-
-  /// Where the slider is held, in place of the position: while dragging, and after letting go
-  /// until the position gets there (from another device, that comes with its next report).
-  Duration? _held;
-  bool _dragging = false;
-  Timer? _letGo;
-
-  @override
-  void initState() {
-    super.initState();
-    // Positions move without events (here or on another device), so redraw while playing.
-    _tick = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (mounted && (ServicesScope.of(context).connect.nowPlaying?.playing ?? false)) setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _tick.cancel();
-    _letGo?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _do(Future<Result> Function() action) async {
-    final result = await action();
-    if (!result.ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(result.error))));
-    }
-  }
-
-  void _seekTo(Duration target) {
-    setState(() {
-      _dragging = false;
-      _held = target;
-    });
-    _letGo?.cancel();
-    _letGo = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _held = null);
-    });
-    unawaited(_do(() => ServicesScope.of(context).connect.seek(target)));
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final connect = ServicesScope.of(context).connect;
     final colors = Theme.of(context).colorScheme;
-    // Shuffle and repeat need room; a phone-sized bar has none (they'll go in a full-screen player).
+    // Shuffle and repeat need room; a phone-sized bar has none (they are in the full-screen player).
     final wide = MediaQuery.sizeOf(context).width >= 600;
-    return ListenableBuilder(
-      listenable: connect,
-      builder: (context, _) {
-        final now = connect.nowPlaying;
+    return NowPlayingBuilder(
+      builder: (context, connect, now) {
         if (now == null) return const SizedBox.shrink();
-        final duration = now.duration;
-        final held = _held;
-        if (held != null && !_dragging && (now.position - held).abs() < const Duration(seconds: 1)) {
-          _held = null; // the position got there
-        }
-        final position = _held ?? now.position;
-        final length = duration?.inMilliseconds ?? 0;
         return Material(
           color: colors.surfaceContainer,
           child: SafeArea(
@@ -91,84 +27,58 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                  ),
-                  child: Slider(
-                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
-                    max: length > 0 ? length.toDouble() : 1,
-                    value: length > 0 ? position.inMilliseconds.clamp(0, length).toDouble() : 0,
-                    semanticFormatterCallback: (ms) => formatDuration(Duration(milliseconds: ms.round())),
-                    onChangeStart: length > 0 ? (_) => _dragging = true : null,
-                    onChanged: length > 0 ? (ms) => setState(() => _held = Duration(milliseconds: ms.round())) : null,
-                    onChangeEnd: length > 0 ? (ms) => _seekTo(Duration(milliseconds: ms.round())) : null,
-                  ),
-                ),
+                Padding(padding: const EdgeInsets.fromLTRB(4, 4, 4, 0), child: SeekSlider(now)),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
                   child: Row(
                     children: [
-                      SizedBox.square(
-                        dimension: 48,
-                        child: ClipRRect(borderRadius: BorderRadius.circular(4), child: Cover(now.coverArt, size: 96)),
-                      ),
-                      const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(now.title ?? 'Nada tocando', maxLines: 1, overflow: TextOverflow.ellipsis),
-                            Text(now.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ],
+                        child: Tooltip(
+                          message: 'Abrir o player',
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(4),
+                            onTap: () => PlayerPage.open(context),
+                            child: Row(
+                              children: [
+                                SizedBox.square(
+                                  dimension: 48,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Cover(now.coverArt, size: 96),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(now.title ?? 'Nada tocando', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      Text(now.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(formatDuration(position), style: Theme.of(context).textTheme.bodySmall),
-                      if (wide)
-                        IconButton(
-                          tooltip: now.shuffle ? 'Desativar aleatório' : 'Ativar aleatório',
-                          icon: Icon(Icons.shuffle, color: now.shuffle ? colors.primary : null),
-                          onPressed: now.canShuffle ? () => _do(() => connect.setShuffle(!now.shuffle)) : null,
-                        ),
+                      if (wide) ShuffleButton(now),
                       IconButton(
                         tooltip: 'Anterior',
                         icon: const Icon(Icons.skip_previous),
-                        onPressed: () => _do(connect.previous),
+                        onPressed: () => runCommand(context, connect.previous),
                       ),
                       IconButton(
                         tooltip: now.playing ? 'Pausar' : 'Tocar',
                         icon: Icon(now.playing ? Icons.pause : Icons.play_arrow),
-                        onPressed: () => _do(connect.toggle),
+                        onPressed: () => runCommand(context, connect.toggle),
                       ),
                       IconButton(
                         tooltip: 'Próxima',
                         icon: const Icon(Icons.skip_next),
-                        onPressed: () => _do(connect.next),
+                        onPressed: () => runCommand(context, connect.next),
                       ),
-                      if (wide)
-                        IconButton(
-                          tooltip: switch (now.repeat) {
-                            Repeat.off => 'Repetir a lista',
-                            Repeat.all => 'Repetir a faixa',
-                            Repeat.one => 'Não repetir',
-                          },
-                          icon: Icon(
-                            now.repeat == Repeat.one ? Icons.repeat_one : Icons.repeat,
-                            color: now.repeat == Repeat.off ? null : colors.primary,
-                          ),
-                          onPressed: now.canRepeat
-                              ? () => _do(
-                                  () => connect.setRepeat(switch (now.repeat) {
-                                    Repeat.off => Repeat.all,
-                                    Repeat.all => Repeat.one,
-                                    Repeat.one => Repeat.off,
-                                  }),
-                                )
-                              : null,
-                        ),
+                      if (wide) RepeatButton(now),
                       IconButton(
                         tooltip: 'Aparelhos',
                         icon: Icon(Icons.devices, color: now.device == null ? null : colors.primary),
