@@ -5,6 +5,7 @@ import 'devices_sheet.dart';
 import 'focus_ring.dart';
 import 'player_controls.dart';
 import 'player_page.dart';
+import 'queue_page.dart';
 
 export 'player_controls.dart' show formatDuration;
 
@@ -16,7 +17,8 @@ class NowPlayingBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    // Shuffle and repeat need room; a phone-sized bar has none (they are in the full-screen player).
+    // Shuffle, repeat and the queue need room; a phone-sized bar has none (they are in the
+    // full-screen player).
     final wide = MediaQuery.sizeOf(context).width >= 600;
     return NowPlayingBuilder(
       builder: (context, connect, now) {
@@ -89,6 +91,12 @@ class NowPlayingBar extends StatelessWidget {
                           onPressed: () => runCommand(context, connect.next),
                         ),
                         if (wide) RepeatButton(now),
+                        if (wide)
+                          IconButton(
+                            tooltip: 'Fila',
+                            icon: const Icon(Icons.queue_music),
+                            onPressed: () => QueuePage.open(context),
+                          ),
                         IconButton(
                           tooltip: 'Aparelhos',
                           icon: Icon(Icons.devices, color: now.device == null ? null : colors.primary),

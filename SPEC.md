@@ -217,6 +217,7 @@ obeys and answers `{"type": "result", "re": "<hub id>", "ok": true}` (or `"ok": 
 | `play`, `pause`, `toggle`, `stop` | | |
 | `next` | | The next track; after the last one, the first, unless `repeat` is `off` |
 | `previous` | | Back to the start of the track; in its first 3 seconds, to the previous track. On the first track, always back to its start |
+| `jump` | `index` | The track at `index` in `queue`, from its start, playing. On the current track, it starts over |
 | `seek` | `positionMs` | |
 | `setVolume` | `volume` (0–100) | |
 | `setQueue` | `queue`, `index`, `positionMs`, `play` | Replace the queue and go to `index` at `positionMs`, playing if `play` |

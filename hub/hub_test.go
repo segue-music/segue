@@ -86,7 +86,7 @@ func info(id string, api API, roles []Role, capabilities ...Action) DeviceInfo {
 var (
 	player     = []Role{RolePlayer, RoleController}
 	controller = []Role{RoleController}
-	everything = []Action{ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious, ActSeek, ActSetVolume, ActSetQueue, ActSetRepeat, ActSetShuffle}
+	everything = []Action{ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious, ActJump, ActSeek, ActSetVolume, ActSetQueue, ActSetRepeat, ActSetShuffle}
 )
 
 func as(user string) Auth { return Auth{Scheme: "subsonic", Username: user, Token: "-", Salt: "-"} }
@@ -352,6 +352,12 @@ func TestCommands(t *testing.T) {
 	}
 	pc.expect("result")
 
+	pc.send(map[string]any{"type": "command", "id": "j", "target": "tv", "command": map[string]any{"action": "jump", "index": 2}})
+	if got := tv.obey(""); got.Action != ActJump || got.Index == nil || *got.Index != 2 {
+		t.Fatalf("the TV got %+v", got)
+	}
+	pc.expect("result")
+
 	pc.send(map[string]any{"type": "command", "id": "c2", "target": "tv", "command": map[string]any{"action": "next"}})
 	tv.obey("no such track")
 	if r := pc.expect("result"); r.OK || r.Error != "no such track" {
@@ -371,6 +377,9 @@ func TestCommands(t *testing.T) {
 		{"tv", map[string]any{"action": "setRepeat", "repeat": "twice"}, "badMessage"},
 		{"speaker", map[string]any{"action": "setRepeat", "repeat": "all"}, "unsupported"},
 		{"tv", map[string]any{"action": "setShuffle"}, "badMessage"},
+		{"tv", map[string]any{"action": "jump"}, "badMessage"},
+		{"tv", map[string]any{"action": "jump", "index": -1}, "badMessage"},
+		{"speaker", map[string]any{"action": "jump", "index": 0}, "unsupported"},
 	} {
 		pc.send(map[string]any{"type": "command", "id": "x", "target": c.target, "command": c.command})
 		if r := pc.expect("result"); r.OK || r.Error != c.want {

@@ -72,6 +72,36 @@ void main() {
     expect(player.position.inSeconds, 0);
   });
 
+  test('a jump plays the track at that place in the queue from its start, even paused', () async {
+    const three = [...songs, Song(id: 's3', title: 'Three')];
+    await player.playQueue(three, position: const Duration(seconds: 30), play: false);
+    await player.jump(2);
+    expect(player.current?.id, 's3');
+    expect(player.playing, isTrue);
+    expect(player.position.inSeconds, 0);
+    expect(reports.last.index, 2);
+    expect(reports.last.status, PlaybackStatus.playing);
+
+    await player.seek(const Duration(seconds: 30));
+    await player.jump(2);
+    expect(player.index, 2);
+    expect(player.position.inSeconds, 0, reason: 'the current track starts over');
+
+    await player.obey(const Command.jump(0));
+    expect(player.current?.id, 's1');
+    await expectLater(player.obey(const Command.jump(3)), throwsA(isA<CommandFailed>()));
+    expect(player.current?.id, 's1');
+  });
+
+  test('with shuffle on, a jump goes by the play order', () async {
+    const three = [...songs, Song(id: 's3', title: 'Three')];
+    await player.playQueue(three);
+    await player.setShuffle(true);
+    expect(player.queue.map((song) => song.id), ['s1', 's3', 's2']); // the fake's shuffle
+    await player.jump(1);
+    expect(player.current?.id, 's3');
+  });
+
   test('setQueue skips items without an id and keeps the current track current', () async {
     await player.obey(
       const Command.setQueue(

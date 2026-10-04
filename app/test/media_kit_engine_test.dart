@@ -88,6 +88,49 @@ void main() {
     await subscription.cancel();
   }, skip: hasLibmpv ? false : 'needs libmpv');
 
+  // A jump is what a tap in the queue does: that track, from its start, playing.
+
+  test('a jump plays, even from paused', () async {
+    final tracks = [for (var i = 0; i < 3; i++) tone(dir, i)];
+    await engine.open(tracks, index: 0, position: Duration.zero, play: false);
+    await engine.jump(2);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(engine.index, 2);
+    expect(engine.playing, isTrue);
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('a jump to the current track starts it over', () async {
+    final tracks = [for (var i = 0; i < 2; i++) tone(dir, i, seconds: 20)];
+    await engine.open(tracks, index: 0, position: const Duration(seconds: 15), play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    await engine.jump(0);
+    // Past the time the engine trusts the position it commanded over media_kit's.
+    await Future<void>.delayed(const Duration(milliseconds: 2500));
+    expect(engine.index, 0);
+    expect(engine.playing, isTrue);
+    expect(engine.position, lessThan(const Duration(seconds: 8)));
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('after the last track ends, a jump plays the track picked', () async {
+    final tracks = [for (var i = 0; i < 3; i++) tone(dir, i, seconds: 1)];
+    await engine.open(tracks, index: 2, position: Duration.zero, play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 1500)); // the queue ends
+    await engine.jump(1);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(engine.index, 1);
+    expect(engine.playing, isTrue);
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('after the last track ends, a jump to it plays it again', () async {
+    final tracks = [for (var i = 0; i < 3; i++) tone(dir, i, seconds: 1)];
+    await engine.open(tracks, index: 2, position: Duration.zero, play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 1500)); // the queue ends
+    await engine.jump(2);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(engine.index, 2);
+    expect(engine.playing, isTrue);
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
   // The player reports its position to the hub right after each of these: a position still at the
   // old place goes to the other devices, which then count from there.
 

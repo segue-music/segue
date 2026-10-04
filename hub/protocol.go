@@ -55,6 +55,7 @@ const (
 	ActStop       Action = "stop"
 	ActNext       Action = "next"
 	ActPrevious   Action = "previous"
+	ActJump       Action = "jump"
 	ActSeek       Action = "seek"
 	ActSetVolume  Action = "setVolume"
 	ActSetQueue   Action = "setQueue"
@@ -63,7 +64,7 @@ const (
 )
 
 var knownActions = map[Action]bool{
-	ActPlay: true, ActPause: true, ActToggle: true, ActStop: true, ActNext: true, ActPrevious: true,
+	ActPlay: true, ActPause: true, ActToggle: true, ActStop: true, ActNext: true, ActPrevious: true, ActJump: true,
 	ActSeek: true, ActSetVolume: true, ActSetQueue: true, ActSetRepeat: true, ActSetShuffle: true,
 }
 
@@ -271,6 +272,8 @@ func parseCommand(raw json.RawMessage) (Command, bool) {
 	switch c.Action {
 	case ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious:
 		return Command{Action: c.Action}, true
+	case ActJump:
+		return Command{Action: c.Action, Index: c.Index}, c.Index != nil && *c.Index >= 0
 	case ActSeek:
 		return Command{Action: c.Action, PositionMs: c.PositionMs}, c.PositionMs != nil && *c.PositionMs >= 0
 	case ActSetVolume:

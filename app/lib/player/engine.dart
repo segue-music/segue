@@ -30,7 +30,11 @@ abstract class AudioEngine {
   Future<void> play();
   Future<void> pause();
   Future<void> stop();
+
+  /// Goes to the track at [index] (a position in [order]) from its start, and plays. The current
+  /// track starts over.
   Future<void> jump(int index);
+
   Future<void> seek(Duration position);
   Future<void> setVolume(int volume);
   Future<void> setRepeat(Repeat mode);
@@ -205,10 +209,15 @@ class MediaKitEngine implements AudioEngine {
   }
 
   @override
-  Future<void> jump(int index) {
+  Future<void> jump(int index) async {
+    final again = index == _index && !_player.state.completed;
     _index = index;
     _moved(Duration.zero);
-    return _player.jump(index);
+    if (!again) return _player.jump(index); // which plays too
+    // mpv ignores a jump to the track it is on. Once the queue has ended, media_kit's jump is the one
+    // that works, since its play would go back to the first track.
+    await _player.seek(Duration.zero);
+    await _player.play();
   }
 
   @override

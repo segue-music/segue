@@ -98,6 +98,7 @@ class FakeEngine implements AudioEngine {
   Future<void> jump(int index) async {
     _index = index;
     _seek(Duration.zero);
+    _playing = true;
     _changes.add(null);
   }
 

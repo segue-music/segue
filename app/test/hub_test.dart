@@ -267,6 +267,23 @@ void main() {
     expect(phone.player.repeat, Repeat.off, reason: 'not the phone\'s own player');
   });
 
+  test('the queue shown is that of the device it controls, and a tap on a track plays it there', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    final phone = await App(user, 'phone').start();
+    await laptop.player.playQueue(songs);
+    await until(() => phone.connect.nowPlaying?.device == 'laptop', 'the phone to follow the laptop');
+    expect(phone.connect.queue.tracks.map((track) => track.title), ['Dream On', 'Other']);
+    expect(phone.connect.queue.index, 0);
+    expect(phone.connect.nowPlaying?.canJump, isTrue);
+    await laptop.player.pause();
+    expect((await phone.connect.jump(1)).ok, isTrue);
+    expect(laptop.player.current?.title, 'Other');
+    expect(laptop.player.playing, isTrue);
+    await until(() => phone.connect.queue.index == 1, 'the phone to see the new track');
+    expect(phone.player.queue, isEmpty, reason: 'not the phone\'s own player');
+  });
+
   test('starting to play on one device stops the others: no other is left paused with the music', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();

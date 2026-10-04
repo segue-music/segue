@@ -69,6 +69,12 @@ class PlayerController extends ChangeNotifier {
     await _jump(index - 1);
   }
 
+  /// The track at [index] of [queue] from its start, playing; the current one starts over.
+  Future<void> jump(int index) async {
+    await _jump(index);
+    _changed(); // starting the current track over doesn't show in the engine's changes
+  }
+
   /// Up to where "previous" goes to the previous track rather than to the start of this one.
   static const previousGrace = Duration(seconds: 3);
 
@@ -112,6 +118,8 @@ class PlayerController extends ChangeNotifier {
         await next();
       case CommandAction.previous:
         await previous();
+      case CommandAction.jump:
+        await jump(command.index!);
       case CommandAction.seek:
         await seek(Duration(milliseconds: command.positionMs!));
       case CommandAction.setVolume:

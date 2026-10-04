@@ -23,6 +23,7 @@ class NowPlaying {
     this.shuffle = false,
     this.canRepeat = false,
     this.canShuffle = false,
+    this.canJump = false,
   });
 
   /// Its Subsonic id (the hub gives the app other devices' songs in its own API), or null when the
@@ -43,10 +44,11 @@ class NowPlaying {
   final Repeat repeat;
   final bool shuffle;
 
-  /// Whether the device it plays on takes [ConnectController.setRepeat] and
-  /// [ConnectController.setShuffle].
+  /// Whether the device it plays on takes [ConnectController.setRepeat],
+  /// [ConnectController.setShuffle] and [ConnectController.jump].
   final bool canRepeat;
   final bool canShuffle;
+  final bool canJump;
 }
 
 /// Spotify's model: the app controls one device at a time, this one or another, and everything you
@@ -110,6 +112,7 @@ class ConnectController extends ChangeNotifier {
         shuffle: player.shuffle,
         canRepeat: true,
         canShuffle: true,
+        canJump: true,
       );
     }
     final state = device.state;
@@ -128,7 +131,16 @@ class ConnectController extends ChangeNotifier {
       shuffle: state?.shuffle ?? false,
       canRepeat: device.info.capabilities.contains(CommandAction.setRepeat),
       canShuffle: device.info.capabilities.contains(CommandAction.setShuffle),
+      canJump: device.info.capabilities.contains(CommandAction.jump),
     );
+  }
+
+  /// The queue of the device the app controls, in its play order (shuffled, or not), and the
+  /// current track's place in it.
+  ({List<QueueItem> tracks, int index}) get queue {
+    final device = activeDevice;
+    if (device == null) return (tracks: [for (final song in player.queue) song.toQueueItem()], index: player.index);
+    return (tracks: device.state?.queue ?? const [], index: device.state?.index ?? 0);
   }
 
   Future<Result> playSongs(List<Song> songs, int index) => _run(
@@ -145,6 +157,9 @@ class ConnectController extends ChangeNotifier {
   Future<Result> next() => _run(const Command(CommandAction.next), player.next);
 
   Future<Result> previous() => _run(const Command(CommandAction.previous), player.previous);
+
+  /// Plays the track at [index] of [queue], from its start.
+  Future<Result> jump(int index) => _run(Command.jump(index), () => player.jump(index));
 
   Future<Result> seek(Duration position) => _run(Command.seek(position.inMilliseconds), () => player.seek(position));
 

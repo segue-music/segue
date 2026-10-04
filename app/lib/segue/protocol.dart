@@ -12,7 +12,7 @@ enum Role { player, controller }
 enum PlaybackStatus { playing, paused, stopped }
 
 /// The command names. Their `name` is the wire name.
-enum CommandAction { play, pause, toggle, stop, next, previous, seek, setVolume, setQueue, setRepeat, setShuffle }
+enum CommandAction { play, pause, toggle, stop, next, previous, jump, seek, setVolume, setQueue, setRepeat, setShuffle }
 
 /// A player's repeat mode (SPEC.md, section 4). Their `name` is the wire name.
 enum Repeat { off, all, one }
@@ -171,6 +171,15 @@ class Command {
       repeat = null,
       shuffle = null;
 
+  const Command.jump(int this.index)
+    : action = CommandAction.jump,
+      positionMs = null,
+      volume = null,
+      queue = null,
+      play = null,
+      repeat = null,
+      shuffle = null;
+
   const Command.seek(int this.positionMs)
     : action = CommandAction.seek,
       volume = null,
@@ -220,6 +229,7 @@ class Command {
   factory Command.fromJson(Map<String, dynamic> json) {
     final action = _enum(CommandAction.values, json['action']);
     return switch (action) {
+      CommandAction.jump => Command.jump((json['index'] as num).toInt()),
       CommandAction.seek => Command.seek((json['positionMs'] as num).toInt()),
       CommandAction.setVolume => Command.setVolume((json['volume'] as num).toInt()),
       CommandAction.setQueue => Command.setQueue(

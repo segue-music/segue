@@ -212,6 +212,8 @@ void main() {
     await press(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedTip(), 'Repetir a lista');
     await press(tester, LogicalKeyboardKey.arrowRight);
+    expect(focusedTip(), 'Fila');
+    await press(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedTip(), 'Aparelhos');
     await press(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedTip(), 'Aparelhos', reason: 'the last one: not to the albums under the bar');
@@ -225,12 +227,14 @@ void main() {
     await press(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedTip(), 'Repetir a faixa', reason: 'not the album under the bar');
     await press(tester, LogicalKeyboardKey.arrowRight);
+    expect(focusedTip(), 'Fila');
+    await press(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedTip(), 'Aparelhos');
     await press(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedTip(), 'Aparelhos');
-    await press(tester, LogicalKeyboardKey.arrowLeft);
-    await press(tester, LogicalKeyboardKey.arrowLeft);
-    await press(tester, LogicalKeyboardKey.arrowLeft);
+    for (var i = 0; i < 4; i++) {
+      await press(tester, LogicalKeyboardKey.arrowLeft);
+    }
     expect(focusedTip(), 'Pausar', reason: 'and back left along the buttons');
     await tester.pumpWidget(const SizedBox());
   });

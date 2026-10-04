@@ -7,6 +7,7 @@ import '../connect/connect.dart';
 import 'cover.dart';
 import 'devices_sheet.dart';
 import 'player_controls.dart';
+import 'queue_page.dart';
 
 /// The full-screen player: what plays, wherever it plays, big, with every control.
 class PlayerPage extends StatelessWidget {
@@ -48,6 +49,11 @@ class PlayerPage extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                 actions: [
+                  IconButton(
+                    tooltip: 'Fila',
+                    icon: const Icon(Icons.queue_music),
+                    onPressed: () => QueuePage.open(context),
+                  ),
                   IconButton(
                     tooltip: 'Aparelhos',
                     icon: Icon(Icons.devices, color: device == null ? null : colors.primary),

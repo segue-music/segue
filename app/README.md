@@ -13,6 +13,9 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   phone, a bar at the bottom; the album page; search (artists, albums and songs); and playback
   through media_kit (libmpv), with a seek bar, shuffle and repeat (the queue or the track), in the
   player bar and in a full-screen player that the song in the bar opens;
+- the queue of whichever device the app controls, from the full-screen player or, on a wide
+  screen, the player bar: the current track on top, the next ones under it and what played before
+  above it. A tap on a track plays it there;
 - on the album page and in search, the current song (on whichever device the app controls) stands
   out in the theme's color, with an equalizer in place of its number, or over its cover, while it
   plays;
@@ -32,7 +35,7 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   Android 8 on, the Android TV banner, on Linux the window's icon and an entry in the application
   menu, and the iOS icon.
 
-Not yet: playlists, the queue on screen, the media controls on the other platforms (Android's
+Not yet: playlists, editing the queue (play next, add to it, reorder it), the media controls on the other platforms (Android's
 media session), an offline cache, settings, and CarPlay as an app of its own (browsing the library
 on the car's screen, which needs Apple's CarPlay entitlement and native code). The Android build
 has been tried on a tablet and on an Android TV; the iOS build has not been tried on a device yet.
@@ -45,7 +48,7 @@ has been tried on a tablet and on an Android TV; the iOS build has not been trie
 | `lib/segue/` | The Segue protocol in Dart, the hub client (reconnects by itself) and hub discovery |
 | `lib/player/` | `PlayerController` (queue, commands, state reports) over an `AudioEngine`; `MediaKitEngine` is the real one. `MediaControls`: the system's media controls. `AudioInterruptions`: calls and the like pausing the music, on iOS |
 | `lib/connect/` | `ConnectController`: which device the app controls, and moving the music between devices |
-| `lib/ui/` | The pages: sign-in, albums, artists, album, artist, search, player bar and full-screen player, device picker |
+| `lib/ui/` | The pages: sign-in, albums, artists, album, artist, search, player bar and full-screen player, queue, device picker |
 | `test/` | Unit and widget tests, and tests against the real Go hub (`hub_test.dart`) |
 | `tool/` | A Docker image and script to build and test without installing Flutter; `icons.dart` makes every icon from the artwork, `icon.png` |
 

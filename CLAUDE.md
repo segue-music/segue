@@ -116,8 +116,8 @@ Running two app instances on one machine as different devices:
   `media_kit_engine_test.dart` against the real libmpv. It tracks the current index itself, since
   media_kit's `state.playlist.index` briefly drops to 0 on every open. It keeps the position it
   commanded (seek, jump, open) until media_kit's catches up, so the report right after isn't stale.
-  It reapplies shuffle after each open, since media_kit turns it off. And it reports when a track
-  starts over on repeat. The play order (`order`) maps the shuffled playlist back to the songs.
+  It reapplies shuffle after each open, since media_kit turns it off. It starts the current track
+  over itself on a jump to it, which mpv ignores. And it reports when a track starts over on repeat. The play order (`order`) maps the shuffled playlist back to the songs.
 - `ConnectController` (`lib/connect/`) follows Spotify's model: the app controls one device at a
   time (`activeId`, null meaning this device). UI actions go through it (`playSongs`, `toggle`,
   `seek`, ...): it either runs them on the local player or sends them as hub commands. The UI should
