@@ -35,11 +35,15 @@ class MediaKitEngine implements AudioEngine {
     _subscriptions = [
       stream.playing.listen((_) => _changes.add(null)),
       stream.playlist.listen((playlist) {
+        if (playlist.index != _index) _moved(Duration.zero); // moved on by itself
         _index = playlist.index;
         _changes.add(null);
       }),
       stream.volume.listen((_) => _changes.add(null)),
       stream.completed.listen((_) => _changes.add(null)),
+      stream.position.listen((reported) {
+        if (_movedTo != null && (reported - position).abs() < const Duration(seconds: 1)) _movedTo = null;
+      }),
     ];
   }
 
@@ -53,6 +57,18 @@ class MediaKitEngine implements AudioEngine {
   // and comes back silently (its playlist stream skips a repeat of what it already announced).
   int _index = 0;
 
+  // Where playback went with a seek, a jump or a new track, until media_kit's position gets there:
+  // its state.position keeps the old place for a moment, and the player's report to the hub,
+  // right after, would send that to the other devices. Past [_trustMoveFor], media_kit's is back.
+  Duration? _movedTo;
+  DateTime _movedAt = DateTime.now();
+  static const _trustMoveFor = Duration(seconds: 2);
+
+  void _moved(Duration to) {
+    _movedTo = to;
+    _movedAt = DateTime.now();
+  }
+
   @override
   Stream<void> get changes => _changes.stream;
 
@@ -63,7 +79,12 @@ class MediaKitEngine implements AudioEngine {
   int get index => _index;
 
   @override
-  Duration get position => _player.state.position;
+  Duration get position {
+    final moved = _movedTo;
+    final since = DateTime.now().difference(_movedAt);
+    if (moved == null || since > _trustMoveFor) return _player.state.position;
+    return playing ? moved + since : moved;
+  }
 
   @override
   int get volume => _player.state.volume.round();
@@ -72,6 +93,7 @@ class MediaKitEngine implements AudioEngine {
   Future<void> open(List<Uri> tracks, {required int index, required Duration position, required bool play}) async {
     await _ready;
     _index = index;
+    _moved(position);
     final playlist = Playlist([for (final track in tracks) Media(track.toString())], index: index);
     if (position == Duration.zero) {
       await _player.open(playlist, play: play);
@@ -81,7 +103,7 @@ class MediaKitEngine implements AudioEngine {
     final loaded = _player.stream.duration.firstWhere((d) => d > Duration.zero);
     await _player.open(playlist, play: false);
     await loaded.timeout(const Duration(seconds: 10), onTimeout: () => Duration.zero);
-    await _player.seek(position);
+    await seek(position);
     if (play) await _player.play();
   }
 
@@ -94,17 +116,22 @@ class MediaKitEngine implements AudioEngine {
   @override
   Future<void> stop() {
     _index = 0;
+    _moved(Duration.zero);
     return _player.stop();
   }
 
   @override
   Future<void> jump(int index) {
     _index = index;
+    _moved(Duration.zero);
     return _player.jump(index);
   }
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) {
+    _moved(position);
+    return _player.seek(position);
+  }
 
   @override
   Future<void> setVolume(int volume) => _player.setVolume(volume.toDouble());

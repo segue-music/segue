@@ -86,4 +86,34 @@ void main() {
     expect(changes.last, 2);
     await subscription.cancel();
   }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  // The player reports its position to the hub right after each of these: a position still at the
+  // old place goes to the other devices, which then count from there.
+
+  test('a seek shows in the position as soon as it returns', () async {
+    await engine.open([tone(dir, 0)], index: 0, position: Duration.zero, play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    await engine.seek(Duration.zero);
+    expect(engine.position, lessThan(const Duration(milliseconds: 500)));
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('opening at a position shows it as soon as it returns', () async {
+    await engine.open([tone(dir, 0)], index: 0, position: const Duration(seconds: 2), play: false);
+    expect(engine.position.inMilliseconds, closeTo(2000, 200));
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('a new track, by a jump or moving on by itself, announces itself at its start', () async {
+    final tracks = [tone(dir, 0, seconds: 1), tone(dir, 1), tone(dir, 2)];
+    final announced = <int, Duration>{}; // track → the position when it was first announced
+    final subscription = engine.changes.listen((_) => announced.putIfAbsent(engine.index, () => engine.position));
+    await engine.open(tracks, index: 0, position: Duration.zero, play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 2200)); // moves on to track 1 at 1 s
+    await engine.jump(2);
+    expect(engine.position, lessThan(const Duration(milliseconds: 500)));
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(announced.keys, containsAll([1, 2]));
+    expect(announced[1], lessThan(const Duration(milliseconds: 500)));
+    expect(announced[2], lessThan(const Duration(milliseconds: 500)));
+    await subscription.cancel();
+  }, skip: hasLibmpv ? false : 'needs libmpv');
 }
