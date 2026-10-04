@@ -99,9 +99,12 @@ Running two app instances on one machine as different devices:
   shortcuts all see it.
 - `PlayerController` (`lib/player/`) is this device's player over an `AudioEngine` interface.
   `MediaKitEngine` (libmpv) is the real engine; `test/fakes.dart` has `FakeEngine` for tests.
-  `MediaKitEngine` tracks the current index itself, because media_kit's `state.playlist.index`
-  briefly drops to 0 on every open without announcing it. `media_kit_engine_test.dart` pins this
-  behaviour.
+  `MediaKitEngine` works around media_kit in a few places, each pinned by
+  `media_kit_engine_test.dart` against the real libmpv. It tracks the current index itself, since
+  media_kit's `state.playlist.index` briefly drops to 0 on every open. It keeps the position it
+  commanded (seek, jump, open) until media_kit's catches up, so the report right after isn't stale.
+  It reapplies shuffle after each open, since media_kit turns it off. And it reports when a track
+  starts over on repeat. The play order (`order`) maps the shuffled playlist back to the songs.
 - `ConnectController` (`lib/connect/`) follows Spotify's model: the app controls one device at a
   time (`activeId`, null meaning this device). UI actions go through it (`playSongs`, `toggle`,
   `seek`, ...): it either runs them on the local player or sends them as hub commands. The UI should

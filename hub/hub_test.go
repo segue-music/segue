@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -85,7 +86,7 @@ func info(id string, api API, roles []Role, capabilities ...Action) DeviceInfo {
 var (
 	player     = []Role{RolePlayer, RoleController}
 	controller = []Role{RoleController}
-	everything = []Action{ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious, ActSeek, ActSetVolume, ActSetQueue}
+	everything = []Action{ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious, ActSeek, ActSetVolume, ActSetQueue, ActSetRepeat, ActSetShuffle}
 )
 
 func as(user string) Auth { return Auth{Scheme: "subsonic", Username: user, Token: "-", Salt: "-"} }
@@ -217,7 +218,6 @@ func TestFirstMessageMustBeAValidHello(t *testing.T) {
 		"not a hello":      map[string]any{"type": "state"},
 		"other protocol":   map[string]any{"type": "hello", "protocol": 2, "auth": as("alice"), "device": info("p", Subsonic, player)},
 		"no device name":   map[string]any{"type": "hello", "protocol": 1, "auth": as("alice"), "device": map[string]any{"id": "p", "client": "c", "api": "subsonic"}},
-		"unknown action":   map[string]any{"type": "hello", "protocol": 1, "auth": as("alice"), "device": info("p", Subsonic, player, "dance")},
 		"incomplete auth":  map[string]any{"type": "hello", "protocol": 1, "auth": map[string]any{"scheme": "subsonic"}, "device": info("p", Subsonic, player)},
 		"wrong field type": map[string]any{"type": "hello", "protocol": "1"},
 	} {
@@ -234,6 +234,37 @@ func TestFirstMessageMustBeAValidHello(t *testing.T) {
 				t.Fatalf("got %v, want close %d", err, CloseBadHello)
 			}
 		})
+	}
+}
+
+func TestUnknownCapabilitiesAreDropped(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+	join(t, url, as("alice"), info("tv", Subsonic, player, ActPlay, "dance"))
+	if d := pc.expectDevice("tv", func(d Device) bool { return d.Online }); !slices.Equal(d.Capabilities, []Action{ActPlay}) {
+		t.Fatalf("capabilities %v", d.Capabilities)
+	}
+}
+
+func TestRepeatAndShuffleInTheState(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs, "repeat": "all", "shuffle": true})
+	if got := pc.expect("state"); got.State.Repeat != RepeatAll || got.State.Shuffle == nil || !*got.State.Shuffle {
+		t.Fatalf("state %+v", got.State)
+	}
+	// A report without them keeps them.
+	tv.report(map[string]any{"status": "paused", "positionMs": 1000})
+	pc.expect("state")
+	_, welcome := join(t, url, as("alice"), info("laptop", Subsonic, controller))
+	tvState := welcome.Devices[slices.IndexFunc(welcome.Devices, func(d Device) bool { return d.ID == "tv" })].State
+	if tvState.Repeat != RepeatAll || tvState.Shuffle == nil || !*tvState.Shuffle {
+		t.Fatalf("the TV's state %+v", tvState)
+	}
+	tv.report(map[string]any{"status": "paused", "positionMs": 1000, "repeat": "twice"})
+	if got := tv.expect("error"); got.Error != "badMessage" {
+		t.Fatalf("got %+v", got)
 	}
 }
 
@@ -310,6 +341,17 @@ func TestCommands(t *testing.T) {
 		t.Fatalf("result %+v", r)
 	}
 
+	pc.send(map[string]any{"type": "command", "id": "r", "target": "tv", "command": map[string]any{"action": "setRepeat", "repeat": "one"}})
+	if got := tv.obey(""); got.Action != ActSetRepeat || got.Repeat != RepeatOne {
+		t.Fatalf("the TV got %+v", got)
+	}
+	pc.expect("result")
+	pc.send(map[string]any{"type": "command", "id": "s", "target": "tv", "command": map[string]any{"action": "setShuffle", "shuffle": false}})
+	if got := tv.obey(""); got.Action != ActSetShuffle || got.Shuffle == nil || *got.Shuffle {
+		t.Fatalf("the TV got %+v", got)
+	}
+	pc.expect("result")
+
 	pc.send(map[string]any{"type": "command", "id": "c2", "target": "tv", "command": map[string]any{"action": "next"}})
 	tv.obey("no such track")
 	if r := pc.expect("result"); r.OK || r.Error != "no such track" {
@@ -326,6 +368,9 @@ func TestCommands(t *testing.T) {
 		{"speaker", map[string]any{"action": "next"}, "unsupported"},
 		{"tv", map[string]any{"action": "seek"}, "badMessage"},
 		{"tv", map[string]any{"action": "setVolume", "volume": 101}, "badMessage"},
+		{"tv", map[string]any{"action": "setRepeat", "repeat": "twice"}, "badMessage"},
+		{"speaker", map[string]any{"action": "setRepeat", "repeat": "all"}, "unsupported"},
+		{"tv", map[string]any{"action": "setShuffle"}, "badMessage"},
 	} {
 		pc.send(map[string]any{"type": "command", "id": "x", "target": c.target, "command": c.command})
 		if r := pc.expect("result"); r.OK || r.Error != c.want {

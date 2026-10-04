@@ -90,4 +90,42 @@ void main() {
     expect(player.position, const Duration(seconds: 5));
     expect(player.playing, isFalse);
   });
+
+  test('next after the last track goes to the first, unless repeat is off', () async {
+    await player.playQueue(songs, index: 1);
+    await expectLater(player.next(), throwsA(isA<CommandFailed>()));
+    await player.setRepeat(Repeat.all);
+    await player.next();
+    expect(player.index, 0);
+    await player.setRepeat(Repeat.one);
+    await player.next();
+    expect(player.index, 1);
+  });
+
+  test('shuffle reorders the queue, keeping the current song, and off puts it back', () async {
+    const three = [...songs, Song(id: 's3', title: 'Three')];
+    await player.playQueue(three, index: 1);
+    reports.clear();
+    await player.setShuffle(true);
+    expect(player.shuffle, isTrue);
+    expect(player.queue.map((song) => song.id), ['s2', 's3', 's1']); // the fake's shuffle
+    expect(player.current?.id, 's2');
+    // The queue goes once, in the report after the change; the others leave it out.
+    expect(reports.lastWhere((report) => report.queue != null).queue?.map((item) => item.id), ['s2', 's3', 's1']);
+    expect(reports.last.shuffle, isTrue);
+    await player.setShuffle(false);
+    expect(player.queue.map((song) => song.id), ['s1', 's2', 's3']);
+    expect(player.current?.id, 's2');
+    expect(reports.last.shuffle, isFalse);
+  });
+
+  test('obeys setRepeat and setShuffle, and reports both', () async {
+    await player.playQueue(songs);
+    await player.obey(const Command.setRepeat(Repeat.one));
+    expect(player.repeat, Repeat.one);
+    expect(reports.last.repeat, Repeat.one);
+    await player.obey(const Command.setShuffle(true));
+    expect(player.shuffle, isTrue);
+    expect(reports.last.shuffle, isTrue);
+  });
 }

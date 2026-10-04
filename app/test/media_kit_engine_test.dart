@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:segue/player/engine.dart';
+import 'package:segue/segue/protocol.dart';
 
 bool get hasLibmpv {
   for (final name in ['libmpv.so.2', 'libmpv.so']) {
@@ -115,5 +116,60 @@ void main() {
     expect(announced[1], lessThan(const Duration(milliseconds: 500)));
     expect(announced[2], lessThan(const Duration(milliseconds: 500)));
     await subscription.cancel();
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('shuffle keeps the current track playing, and off brings back the order it had', () async {
+    final tracks = [for (var i = 0; i < 5; i++) tone(dir, i)];
+    await engine.open(tracks, index: 2, position: Duration.zero, play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    expect(engine.order, [0, 1, 2, 3, 4]);
+    await engine.setShuffle(true);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(engine.shuffle, isTrue);
+    expect([...engine.order]..sort(), [0, 1, 2, 3, 4]);
+    expect(engine.order[engine.index], 2, reason: 'the same track, still current');
+    expect(engine.playing, isTrue);
+    expect(engine.position, greaterThan(const Duration(milliseconds: 500)), reason: 'not started over');
+    await engine.setShuffle(false);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(engine.order, [0, 1, 2, 3, 4]);
+    expect(engine.index, 2);
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('shuffle stays on for the tracks opened next', () async {
+    final tracks = [for (var i = 0; i < 8; i++) tone(dir, i)];
+    await engine.setShuffle(true);
+    await engine.open(tracks, index: 3, position: Duration.zero, play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    expect(engine.shuffle, isTrue);
+    expect(engine.order[engine.index], 3);
+    expect(engine.order, isNot([0, 1, 2, 3, 4, 5, 6, 7])); // 1 in 40320 to be so by chance
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('repeat one starts the track over, and says so', () async {
+    // With the audio sent nowhere, mpv goes through a track faster than it lasts: this one, of 2 s,
+    // starts over after about 1.3 s.
+    final tracks = [tone(dir, 0, seconds: 2), tone(dir, 1)];
+    await engine.setRepeat(Repeat.one);
+    expect(engine.repeat, Repeat.one);
+    final opened = DateTime.now();
+    final restarts = <Duration>[];
+    final subscription = engine.changes.listen((_) {
+      if (DateTime.now().difference(opened) > const Duration(milliseconds: 400)) restarts.add(engine.position);
+    });
+    await engine.open(tracks, index: 0, position: Duration.zero, play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 2500));
+    expect(engine.index, 0);
+    expect(restarts, contains(lessThan(const Duration(milliseconds: 500))));
+    await subscription.cancel();
+  }, skip: hasLibmpv ? false : 'needs libmpv');
+
+  test('repeat all goes back to the first track after the last', () async {
+    final tracks = [tone(dir, 0, seconds: 1), tone(dir, 1, seconds: 1)];
+    await engine.setRepeat(Repeat.all);
+    await engine.open(tracks, index: 1, position: Duration.zero, play: true);
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+    expect(engine.index, 0);
+    expect(engine.playing, isTrue);
   }, skip: hasLibmpv ? false : 'needs libmpv');
 }

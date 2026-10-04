@@ -12,7 +12,10 @@ enum Role { player, controller }
 enum PlaybackStatus { playing, paused, stopped }
 
 /// The command names. Their `name` is the wire name.
-enum CommandAction { play, pause, toggle, stop, next, previous, seek, setVolume, setQueue }
+enum CommandAction { play, pause, toggle, stop, next, previous, seek, setVolume, setQueue, setRepeat, setShuffle }
+
+/// A player's repeat mode (SPEC.md, section 4). Their `name` is the wire name.
+enum Repeat { off, all, one }
 
 /// Close codes (SPEC.md, section 2).
 abstract final class CloseCode {
@@ -75,13 +78,25 @@ class QueueItem {
 /// What a player reports. [status] and [positionMs] go in every report; an optional field left
 /// null keeps its previous value.
 class PlayerState {
-  const PlayerState({required this.status, required this.positionMs, this.queue, this.index, this.volume});
+  const PlayerState({
+    required this.status,
+    required this.positionMs,
+    this.queue,
+    this.index,
+    this.volume,
+    this.repeat,
+    this.shuffle,
+  });
 
   final PlaybackStatus status;
   final int positionMs;
   final List<QueueItem>? queue;
   final int? index;
   final int? volume;
+  final Repeat? repeat;
+
+  /// Whether [queue] is in a shuffled order.
+  final bool? shuffle;
 
   Map<String, Object?> toJson() => {
     'status': status.name,
@@ -89,6 +104,8 @@ class PlayerState {
     'queue': ?queue?.map((item) => item.toJson()).toList(),
     'index': ?index,
     'volume': ?volume,
+    'repeat': ?repeat?.name,
+    'shuffle': ?shuffle,
   };
 }
 
@@ -101,6 +118,8 @@ class StampedState extends PlayerState {
     super.queue,
     super.index,
     super.volume,
+    super.repeat,
+    super.shuffle,
   });
 
   factory StampedState.fromJson(Map<String, dynamic> json) => StampedState(
@@ -110,6 +129,8 @@ class StampedState extends PlayerState {
     queue: (json['queue'] as List?)?.map((item) => QueueItem.fromJson(item as Map<String, dynamic>)).toList(),
     index: (json['index'] as num?)?.toInt(),
     volume: (json['volume'] as num?)?.toInt(),
+    repeat: json['repeat'] == null ? null : _enum(Repeat.values, json['repeat']),
+    shuffle: json['shuffle'] as bool?,
   );
 
   final int at;
@@ -122,6 +143,8 @@ class StampedState extends PlayerState {
     queue: report.queue ?? queue,
     index: report.index ?? index,
     volume: report.volume ?? volume,
+    repeat: report.repeat ?? repeat,
+    shuffle: report.shuffle ?? shuffle,
   );
 
   QueueItem? get current {
@@ -139,26 +162,60 @@ class StampedState extends PlayerState {
 }
 
 class Command {
-  const Command(this.action) : positionMs = null, volume = null, queue = null, index = null, play = null;
+  const Command(this.action)
+    : positionMs = null,
+      volume = null,
+      queue = null,
+      index = null,
+      play = null,
+      repeat = null,
+      shuffle = null;
+
   const Command.seek(int this.positionMs)
     : action = CommandAction.seek,
       volume = null,
       queue = null,
       index = null,
-      play = null;
+      play = null,
+      repeat = null,
+      shuffle = null;
+
   const Command.setVolume(int this.volume)
     : action = CommandAction.setVolume,
       positionMs = null,
       queue = null,
       index = null,
-      play = null;
+      play = null,
+      repeat = null,
+      shuffle = null;
+
   const Command.setQueue({
     required List<QueueItem> this.queue,
     required int this.index,
     required int this.positionMs,
     required bool this.play,
   }) : action = CommandAction.setQueue,
-       volume = null;
+       volume = null,
+       repeat = null,
+       shuffle = null;
+
+  const Command.setRepeat(Repeat this.repeat)
+    : action = CommandAction.setRepeat,
+      positionMs = null,
+      volume = null,
+      queue = null,
+      index = null,
+      play = null,
+      shuffle = null;
+
+  const Command.setShuffle(bool this.shuffle)
+    : action = CommandAction.setShuffle,
+      positionMs = null,
+      volume = null,
+      queue = null,
+      index = null,
+      play = null,
+      repeat = null;
 
   factory Command.fromJson(Map<String, dynamic> json) {
     final action = _enum(CommandAction.values, json['action']);
@@ -171,6 +228,8 @@ class Command {
         positionMs: (json['positionMs'] as num).toInt(),
         play: json['play'] as bool,
       ),
+      CommandAction.setRepeat => Command.setRepeat(_enum(Repeat.values, json['repeat'])),
+      CommandAction.setShuffle => Command.setShuffle(json['shuffle'] as bool),
       _ => Command(action),
     };
   }
@@ -181,6 +240,8 @@ class Command {
   final List<QueueItem>? queue;
   final int? index;
   final bool? play;
+  final Repeat? repeat;
+  final bool? shuffle;
 
   Map<String, Object?> toJson() => {
     'action': action.name,
@@ -189,6 +250,8 @@ class Command {
     'queue': ?queue?.map((item) => item.toJson()).toList(),
     'index': ?index,
     'play': ?play,
+    'repeat': ?repeat?.name,
+    'shuffle': ?shuffle,
   };
 }
 
@@ -210,7 +273,10 @@ class DeviceInfo {
     version: json['version'] as String?,
     api: _enum(Api.values, json['api']),
     roles: [for (final r in json['roles'] as List) _enum(Role.values, r)],
-    capabilities: [for (final a in json['capabilities'] as List) _enum(CommandAction.values, a)],
+    // Commands this app doesn't know are left out (SPEC.md, section 2).
+    capabilities: [
+      for (final a in json['capabilities'] as List) ...CommandAction.values.where((known) => known.name == a),
+    ],
   );
 
   /// Stable per installation, not per connection.

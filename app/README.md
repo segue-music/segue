@@ -8,10 +8,11 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
 - signing in with the media server's own account, with the password kept as a Subsonic token in
   the system's secure storage;
 - an album grid (newest first), the album page, search (albums and songs, by name, title or
-  artist), and playback through media_kit (libmpv);
+  artist), and playback through media_kit (libmpv), with a seek bar, shuffle and repeat (the
+  queue or the track; on wide screens);
 - Connect: the hub is found next to the server (or typed in), and the device picker lists the
   user's other devices that are online, with what they play. Picking one makes the app control it
-  (play, pause, skip, play an album there). Picking this device again moves the music here, at the
+  (play, pause, skip, seek, shuffle, repeat, play an album there). Picking this device again moves the music here, at the
   same point. If the device it controls closes, its music stays here, paused. An app opened when
   nothing plays anywhere picks up where the music was.
 

@@ -56,8 +56,10 @@ void main() {
       connect,
     );
 
-    await tester.binding.setSurfaceSize(const Size(360, 640));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // The screen itself, not just the surface: the bar picks what fits from MediaQuery.
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
         home: ServicesScope(
@@ -90,8 +92,10 @@ void main() {
       player,
       ConnectController(player: player),
     );
-    await tester.binding.setSurfaceSize(const Size(360, 640));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+    // The screen itself, not just the surface: the bar picks what fits from MediaQuery.
+    tester.view.physicalSize = const Size(360, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
         home: ServicesScope(
@@ -117,6 +121,63 @@ void main() {
     await drag.up();
     await tester.pump();
     expect(player.position.inSeconds, closeTo(201, 3));
+    await tester.pumpWidget(const SizedBox()); // stops the bar's timers
+  });
+
+  testWidgets('shuffle and repeat buttons, on a wide screen: shuffle toggles, repeat goes off, list, track', (
+    tester,
+  ) async {
+    const credentials = SubsonicCredentials(username: 'a', token: 't', salt: 's');
+    final api = SubsonicApi(
+      Uri.parse('https://music.test'),
+      credentials,
+      client: MockClient((_) async => http.Response('', 404)),
+    );
+    final player = PlayerController(FakeEngine(), api);
+    await player.playQueue(const [
+      Song(id: 's1', title: 'Dream On', duration: Duration(seconds: 268)),
+      Song(id: 's2', title: 'Other', duration: Duration(seconds: 200)),
+    ], play: false);
+    final services = Services(
+      Session(server: Uri.parse('https://music.test'), credentials: credentials, deviceId: 'me', deviceName: 'me'),
+      api,
+      player,
+      ConnectController(player: player),
+    );
+    Future<void> pumpAt(Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ServicesScope(
+            services: services,
+            child: const Scaffold(bottomNavigationBar: NowPlayingBar()),
+          ),
+        ),
+      );
+    }
+
+    addTearDown(tester.view.reset);
+    await pumpAt(const Size(1000, 600));
+    await tester.tap(find.byTooltip('Ativar aleatório'));
+    await tester.pump();
+    expect(player.shuffle, isTrue);
+    expect(find.byTooltip('Desativar aleatório'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Repetir a lista'));
+    await tester.pump();
+    expect(player.repeat, Repeat.all);
+    await tester.tap(find.byTooltip('Repetir a faixa'));
+    await tester.pump();
+    expect(player.repeat, Repeat.one);
+    await tester.tap(find.byTooltip('Não repetir'));
+    await tester.pump();
+    expect(player.repeat, Repeat.off);
+
+    // No room for them in a phone-sized bar.
+    await pumpAt(const Size(360, 640));
+    expect(find.byTooltip('Ativar aleatório'), findsNothing);
+    expect(find.byTooltip('Repetir a lista'), findsNothing);
     await tester.pumpWidget(const SizedBox()); // stops the bar's timers
   });
 }

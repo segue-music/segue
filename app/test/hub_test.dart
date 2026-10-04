@@ -250,6 +250,23 @@ void main() {
     expect(phone.connect.nowPlaying?.device, isNull);
   });
 
+  test('repeat and shuffle go to the device it controls, and show from its state', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    final phone = await App(user, 'phone').start();
+    await laptop.player.playQueue(songs);
+    await until(() => phone.connect.nowPlaying?.device == 'laptop', 'the phone to follow the laptop');
+    expect(phone.connect.nowPlaying?.canRepeat, isTrue);
+    expect(phone.connect.nowPlaying?.canShuffle, isTrue);
+    expect((await phone.connect.setRepeat(Repeat.all)).ok, isTrue);
+    expect(laptop.player.repeat, Repeat.all);
+    await until(() => phone.connect.nowPlaying?.repeat == Repeat.all, 'the phone to show the repeat');
+    expect((await phone.connect.setShuffle(true)).ok, isTrue);
+    expect(laptop.player.shuffle, isTrue);
+    await until(() => phone.connect.nowPlaying?.shuffle ?? false, 'the phone to show the shuffle');
+    expect(phone.player.repeat, Repeat.off, reason: 'not the phone\'s own player');
+  });
+
   test('starting to play on one device pauses the others', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();

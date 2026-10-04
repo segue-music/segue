@@ -17,6 +17,10 @@ class NowPlaying {
     this.coverArt,
     this.duration,
     this.device,
+    this.repeat = Repeat.off,
+    this.shuffle = false,
+    this.canRepeat = false,
+    this.canShuffle = false,
   });
 
   final String? title;
@@ -28,6 +32,14 @@ class NowPlaying {
 
   /// The other device it plays on; null when it plays here.
   final String? device;
+
+  final Repeat repeat;
+  final bool shuffle;
+
+  /// Whether the device it plays on takes [ConnectController.setRepeat] and
+  /// [ConnectController.setShuffle].
+  final bool canRepeat;
+  final bool canShuffle;
 }
 
 /// Spotify's model: the app controls one device at a time, this one or another, and everything you
@@ -85,6 +97,10 @@ class ConnectController extends ChangeNotifier {
         playing: player.playing,
         position: player.position,
         duration: song.duration,
+        repeat: player.repeat,
+        shuffle: player.shuffle,
+        canRepeat: true,
+        canShuffle: true,
       );
     }
     final state = device.state;
@@ -97,6 +113,10 @@ class ConnectController extends ChangeNotifier {
       position: Duration(milliseconds: client!.positionMs(device.id) ?? 0),
       duration: item?.durationMs == null ? null : Duration(milliseconds: item!.durationMs!),
       device: device.info.name,
+      repeat: state?.repeat ?? Repeat.off,
+      shuffle: state?.shuffle ?? false,
+      canRepeat: device.info.capabilities.contains(CommandAction.setRepeat),
+      canShuffle: device.info.capabilities.contains(CommandAction.setShuffle),
     );
   }
 
@@ -116,6 +136,10 @@ class ConnectController extends ChangeNotifier {
   Future<Result> previous() => _run(const Command(CommandAction.previous), player.previous);
 
   Future<Result> seek(Duration position) => _run(Command.seek(position.inMilliseconds), () => player.seek(position));
+
+  Future<Result> setRepeat(Repeat mode) => _run(Command.setRepeat(mode), () => player.setRepeat(mode));
+
+  Future<Result> setShuffle(bool on) => _run(Command.setShuffle(on), () => player.setShuffle(on));
 
   /// Makes [deviceId] (null: this device) the one the app controls, moving the music there if the
   /// current one has any.

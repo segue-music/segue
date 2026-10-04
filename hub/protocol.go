@@ -34,23 +34,37 @@ const (
 	Stopped Status = "stopped"
 )
 
+// Repeat is a player's repeat mode: off, the whole queue (after the last track, the first), or the
+// current track.
+type Repeat string
+
+const (
+	RepeatOff Repeat = "off"
+	RepeatAll Repeat = "all"
+	RepeatOne Repeat = "one"
+)
+
+func (r Repeat) valid() bool { return r == RepeatOff || r == RepeatAll || r == RepeatOne }
+
 type Action string
 
 const (
-	ActPlay      Action = "play"
-	ActPause     Action = "pause"
-	ActToggle    Action = "toggle"
-	ActStop      Action = "stop"
-	ActNext      Action = "next"
-	ActPrevious  Action = "previous"
-	ActSeek      Action = "seek"
-	ActSetVolume Action = "setVolume"
-	ActSetQueue  Action = "setQueue"
+	ActPlay       Action = "play"
+	ActPause      Action = "pause"
+	ActToggle     Action = "toggle"
+	ActStop       Action = "stop"
+	ActNext       Action = "next"
+	ActPrevious   Action = "previous"
+	ActSeek       Action = "seek"
+	ActSetVolume  Action = "setVolume"
+	ActSetQueue   Action = "setQueue"
+	ActSetRepeat  Action = "setRepeat"
+	ActSetShuffle Action = "setShuffle"
 )
 
 var knownActions = map[Action]bool{
 	ActPlay: true, ActPause: true, ActToggle: true, ActStop: true, ActNext: true, ActPrevious: true,
-	ActSeek: true, ActSetVolume: true, ActSetQueue: true,
+	ActSeek: true, ActSetVolume: true, ActSetQueue: true, ActSetRepeat: true, ActSetShuffle: true,
 }
 
 // Close codes (SPEC.md, section 2).
@@ -96,7 +110,8 @@ type DeviceInfo struct {
 	Capabilities []Action `json:"capabilities"`
 }
 
-// clean checks the fields and drops repeated roles and capabilities.
+// clean checks the fields and drops repeated roles and capabilities. Capabilities this hub doesn't
+// know are dropped too: a newer app still connects, without the commands this hub can't route.
 func (d *DeviceInfo) clean() bool {
 	if d.ID == "" || d.Name == "" || d.Client == "" || (d.API != Subsonic && d.API != Jellyfin) {
 		return false
@@ -112,10 +127,7 @@ func (d *DeviceInfo) clean() bool {
 	}
 	capabilities := []Action{}
 	for _, a := range d.Capabilities {
-		if !knownActions[a] {
-			return false
-		}
-		if !slices.Contains(capabilities, a) {
+		if knownActions[a] && !slices.Contains(capabilities, a) {
 			capabilities = append(capabilities, a)
 		}
 	}
@@ -143,6 +155,8 @@ type PlayerState struct {
 	Queue      []QueueItem `json:"queue,omitzero"` // nil: unchanged; empty: no queue
 	Index      *int        `json:"index,omitempty"`
 	Volume     *int        `json:"volume,omitempty"`
+	Repeat     Repeat      `json:"repeat,omitempty"` // "": unchanged
+	Shuffle    *bool       `json:"shuffle,omitempty"`
 }
 
 func (s *PlayerState) merge(report PlayerState) {
@@ -155,6 +169,12 @@ func (s *PlayerState) merge(report PlayerState) {
 	}
 	if report.Volume != nil {
 		s.Volume = report.Volume
+	}
+	if report.Repeat != "" {
+		s.Repeat = report.Repeat
+	}
+	if report.Shuffle != nil {
+		s.Shuffle = report.Shuffle
 	}
 }
 
@@ -196,6 +216,8 @@ type Command struct {
 	Queue      []QueueItem `json:"queue,omitzero"`
 	Index      *int        `json:"index,omitempty"`
 	Play       *bool       `json:"play,omitempty"`
+	Repeat     Repeat      `json:"repeat,omitempty"`
+	Shuffle    *bool       `json:"shuffle,omitempty"`
 }
 
 // Device is a device as other devices see it.
@@ -235,7 +257,8 @@ func parseState(raw json.RawMessage) (PlayerState, bool) {
 	state.PositionMs = *s.PositionMs
 	ok := (state.Status == Playing || state.Status == Paused || state.Status == Stopped) &&
 		validQueue(state.Queue) && (state.Index == nil || *state.Index >= 0) &&
-		(state.Volume == nil || (*state.Volume >= 0 && *state.Volume <= 100))
+		(state.Volume == nil || (*state.Volume >= 0 && *state.Volume <= 100)) &&
+		(state.Repeat == "" || state.Repeat.valid())
 	return state, ok
 }
 
@@ -252,6 +275,10 @@ func parseCommand(raw json.RawMessage) (Command, bool) {
 		return Command{Action: c.Action, PositionMs: c.PositionMs}, c.PositionMs != nil && *c.PositionMs >= 0
 	case ActSetVolume:
 		return Command{Action: c.Action, Volume: c.Volume}, c.Volume != nil && *c.Volume >= 0 && *c.Volume <= 100
+	case ActSetRepeat:
+		return Command{Action: c.Action, Repeat: c.Repeat}, c.Repeat.valid()
+	case ActSetShuffle:
+		return Command{Action: c.Action, Shuffle: c.Shuffle}, c.Shuffle != nil
 	case ActSetQueue:
 		ok := c.Queue != nil && validQueue(c.Queue) && c.Index != nil && *c.Index >= 0 &&
 			c.PositionMs != nil && *c.PositionMs >= 0 && c.Play != nil

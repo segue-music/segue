@@ -112,7 +112,8 @@ Subsonic's plain-password form (`p=`) is not accepted.
 - `client`, `version`: the app.
 - `api`: `subsonic` or `jellyfin`, the API the app uses. Ids in its messages belong to that API.
 - `roles`: `player`, `controller`, or both.
-- `capabilities`: the commands it obeys as a player ([section 5](#5-commands)).
+- `capabilities`: the commands it obeys as a player ([section 5](#5-commands)). The hub ignores
+  the ones it doesn't know, and so should apps, so that a newer app still works with an older hub.
 
 The hub answers with `welcome`:
 
@@ -166,6 +167,8 @@ report periodically:
     "positionMs": 42000,
     "index": 0,
     "volume": 80,
+    "repeat": "off",
+    "shuffle": false,
     "queue": [
       { "id": "5QFKvMsJrd57QE2Le2dKKo", "title": "Dream On", "artist": "Aerosmith", "album": "Aerosmith", "durationMs": 268000 }
     ]
@@ -180,6 +183,9 @@ report periodically:
 - `queue` is the play order as the player has it (after shuffling). Each item has its id, in the
   player's API, and enough metadata to be shown without a lookup.
 - `index` is the current track's position in `queue`. `volume` goes from 0 to 100.
+- `repeat` is `off`, `all` (after the last track, the first) or `one` (the current track, again and
+  again). `shuffle` says whether the queue was shuffled: when it is, `queue` is already in the
+  shuffled order. A player that repeats a track reports when it starts over.
 
 The hub adds `at`, its own time when the report arrived, and relays the report to the other
 devices. Any device computes where playback is now as `positionMs + (hubNow - at)` while `playing`,
@@ -208,11 +214,13 @@ obeys and answers `{"type": "result", "re": "<hub id>", "ok": true}` (or `"ok": 
 | `action` | Fields | Effect |
 |---|---|---|
 | `play`, `pause`, `toggle`, `stop` | | |
-| `next` | | The next track |
+| `next` | | The next track; after the last one, the first, unless `repeat` is `off` |
 | `previous` | | Back to the start of the track; in its first 3 seconds, to the previous track. On the first track, always back to its start |
 | `seek` | `positionMs` | |
 | `setVolume` | `volume` (0–100) | |
 | `setQueue` | `queue`, `index`, `positionMs`, `play` | Replace the queue and go to `index` at `positionMs`, playing if `play` |
+| `setRepeat` | `repeat` (`off`, `all`, `one`) | |
+| `setShuffle` | `shuffle` (true or false) | On, shuffle the queue, the current track still playing; off, back to the order it had. Either way, report the new `queue` |
 
 Errors the hub reports itself: `unknownDevice`; `offline`; `notPlayer`; `unsupported` (the action
 isn't in the player's `capabilities`, so it wasn't sent); `timeout` (no answer in 10 s);
@@ -309,8 +317,9 @@ The hub only routes messages, so other programs can register devices of their ow
 
 - User identity across APIs on servers other than Navidrome (Jellyfin with a Subsonic plugin, for
   instance), where user names may not match.
-- Shuffle and repeat, in the state and as commands. Editing the queue (play next, add to queue)
-  without replacing it.
+- Editing the queue (play next, add to queue) without replacing it.
+- Repeat and shuffle on a transfer: `setQueue` carries the queue in its play order, but neither
+  mode, so the destination keeps its own.
 - Group playback ("Jam"): one queue, several devices listening. It would need a way out of "one
   device plays at a time" (section 4) for the devices in the group.
 - Advertising the hub: an OpenSubsonic extension and a Jellyfin plugin, instead of the `/connect`

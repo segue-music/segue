@@ -70,6 +70,8 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
   Widget build(BuildContext context) {
     final connect = ServicesScope.of(context).connect;
     final colors = Theme.of(context).colorScheme;
+    // Shuffle and repeat need room; a phone-sized bar has none (they'll go in a full-screen player).
+    final wide = MediaQuery.sizeOf(context).width >= 600;
     return ListenableBuilder(
       listenable: connect,
       builder: (context, _) {
@@ -125,6 +127,12 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
                       ),
                       const SizedBox(width: 8),
                       Text(formatDuration(position), style: Theme.of(context).textTheme.bodySmall),
+                      if (wide)
+                        IconButton(
+                          tooltip: now.shuffle ? 'Desativar aleatório' : 'Ativar aleatório',
+                          icon: Icon(Icons.shuffle, color: now.shuffle ? colors.primary : null),
+                          onPressed: now.canShuffle ? () => _do(() => connect.setShuffle(!now.shuffle)) : null,
+                        ),
                       IconButton(
                         tooltip: 'Anterior',
                         icon: const Icon(Icons.skip_previous),
@@ -140,6 +148,27 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
                         icon: const Icon(Icons.skip_next),
                         onPressed: () => _do(connect.next),
                       ),
+                      if (wide)
+                        IconButton(
+                          tooltip: switch (now.repeat) {
+                            Repeat.off => 'Repetir a lista',
+                            Repeat.all => 'Repetir a faixa',
+                            Repeat.one => 'Não repetir',
+                          },
+                          icon: Icon(
+                            now.repeat == Repeat.one ? Icons.repeat_one : Icons.repeat,
+                            color: now.repeat == Repeat.off ? null : colors.primary,
+                          ),
+                          onPressed: now.canRepeat
+                              ? () => _do(
+                                  () => connect.setRepeat(switch (now.repeat) {
+                                    Repeat.off => Repeat.all,
+                                    Repeat.all => Repeat.one,
+                                    Repeat.one => Repeat.off,
+                                  }),
+                                )
+                              : null,
+                        ),
                       IconButton(
                         tooltip: 'Aparelhos',
                         icon: Icon(Icons.devices, color: now.device == null ? null : colors.primary),

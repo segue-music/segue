@@ -17,6 +17,9 @@ class PlayerController extends ChangeNotifier {
   final AudioEngine _engine;
   final SubsonicApi _api;
   late final StreamSubscription<void> _subscription;
+  // The songs as playQueue got them, and _queue: them in the engine's play order (shuffled, or not).
+  List<Song> _opened = const [];
+  List<int> _order = const [];
   List<Song> _queue = const [];
   bool _queueChanged = false;
 
@@ -28,6 +31,8 @@ class PlayerController extends ChangeNotifier {
   bool get playing => _engine.playing;
   Duration get position => _engine.position;
   int get volume => _engine.volume;
+  Repeat get repeat => _engine.repeat;
+  bool get shuffle => _engine.shuffle;
   Song? get current => index >= 0 && index < _queue.length ? _queue[index] : null;
 
   PlaybackStatus get status => _queue.isEmpty
@@ -37,7 +42,8 @@ class PlayerController extends ChangeNotifier {
       : PlaybackStatus.paused;
 
   Future<void> playQueue(List<Song> songs, {int index = 0, Duration position = Duration.zero, bool play = true}) async {
-    _queue = List.unmodifiable(songs);
+    _queue = _opened = List.unmodifiable(songs);
+    _order = const []; // so that the engine's order, shuffled or not, is taken up
     _queueChanged = true;
     await _engine.open(
       [for (final song in songs) _api.streamUrl(song.id)],
@@ -54,7 +60,8 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> toggle() => playing ? _engine.pause() : _engine.play();
 
-  Future<void> next() => _jump(index + 1);
+  /// The next track; after the last one, the first, unless repeat is off (SPEC.md, section 5).
+  Future<void> next() => _jump(index + 1 >= _queue.length && repeat != Repeat.off ? 0 : index + 1);
 
   /// Back to the start of the track; in its first seconds, to the previous one (SPEC.md, section 5).
   Future<void> previous() async {
@@ -72,9 +79,20 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> setVolume(int volume) => _engine.setVolume(volume.clamp(0, 100));
 
+  Future<void> setRepeat(Repeat mode) async {
+    await _engine.setRepeat(mode);
+    _changed();
+  }
+
+  Future<void> setShuffle(bool on) async {
+    await _engine.setShuffle(on);
+    _changed();
+  }
+
   Future<void> stop() async {
     await _engine.stop();
-    _queue = const [];
+    _queue = _opened = const [];
+    _order = const [];
     _queueChanged = true;
     _changed();
   }
@@ -98,6 +116,10 @@ class PlayerController extends ChangeNotifier {
         await seek(Duration(milliseconds: command.positionMs!));
       case CommandAction.setVolume:
         await setVolume(command.volume!);
+      case CommandAction.setRepeat:
+        await setRepeat(command.repeat!);
+      case CommandAction.setShuffle:
+        await setShuffle(command.shuffle!);
       case CommandAction.setQueue:
         // Items the hub couldn't express as Subsonic ids can't be played here: skip them, keeping
         // the current track current.
@@ -124,6 +146,8 @@ class PlayerController extends ChangeNotifier {
     queue: full || _queueChanged ? [for (final song in _queue) song.toQueueItem()] : null,
     index: index,
     volume: volume,
+    repeat: repeat,
+    shuffle: shuffle,
   );
 
   Future<void> _jump(int to) async {
@@ -132,10 +156,20 @@ class PlayerController extends ChangeNotifier {
   }
 
   void _changed() {
+    _followOrder();
     notifyListeners();
     final state = report();
     _queueChanged = false;
     onReport?.call(state);
+  }
+
+  /// Puts [_queue] in the engine's play order, which a shuffle changes.
+  void _followOrder() {
+    final order = _engine.order;
+    if (listEquals(order, _order) || order.length != _opened.length) return;
+    _order = List.unmodifiable(order);
+    _queue = List.unmodifiable([for (final i in order) _opened[i]]);
+    _queueChanged = true;
   }
 
   @override
