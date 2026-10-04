@@ -192,7 +192,7 @@ void main() {
     expect(phone.player.queue, isEmpty);
   });
 
-  test('an app opened after another one picked up the last playback shows it on that one', () async {
+  test('apps opened after the last one closed, with nothing played, each show it on their own', () async {
     final user = newUser();
     final second = await App(user, 'second').start();
     await second.player.playQueue(songs);
@@ -202,13 +202,36 @@ void main() {
     await until(() => fedora.player.queue.isNotEmpty, 'the queue on fedora');
     await Future<void>.delayed(const Duration(milliseconds: 100));
     final again = await App(user, 'second').start();
-    await until(() => again.connect.nowPlaying?.device == 'fedora', 'the second copy to show fedora');
-    expect(again.connect.nowPlaying?.playing, isFalse);
-    expect(again.player.queue, isEmpty);
+    await until(() => again.player.queue.isNotEmpty, 'the queue on the second copy');
+    expect(again.player.playing, isFalse);
+    expect(again.connect.nowPlaying?.device, isNull);
     // Fedora doesn't follow the copy that came back: it was playing when it closed, not now.
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(fedora.connect.activeId, isNull);
     expect(fedora.connect.nowPlaying?.device, isNull);
+  });
+
+  test('when the device it follows closes, its music stays here, paused where it got to', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    final phone = await App(user, 'phone').start();
+    await laptop.player.playQueue(songs, index: 1, position: const Duration(seconds: 30));
+    await until(() => phone.connect.nowPlaying?.device == 'laptop', 'the phone to follow the laptop');
+    await laptop.client.close();
+    await until(() => phone.player.queue.isNotEmpty, 'the music on the phone');
+    expect(phone.connect.activeId, isNull);
+    expect(phone.connect.devices, isEmpty);
+    expect(phone.connect.nowPlaying?.device, isNull);
+    expect(phone.connect.nowPlaying?.title, 'Other');
+    expect(phone.player.playing, isFalse);
+    expect(phone.player.position.inMilliseconds, greaterThanOrEqualTo(30000));
+    // Keeping it isn't playing it: the laptop, opened again, still has the last playback, and
+    // shows it on its own, as the phone does.
+    final again = await App(user, 'laptop').start();
+    await until(() => again.player.queue.isNotEmpty, 'the music back on the laptop');
+    expect(again.connect.nowPlaying?.device, isNull);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(phone.connect.nowPlaying?.device, isNull);
   });
 
   test('starting to play on one device pauses the others', () async {

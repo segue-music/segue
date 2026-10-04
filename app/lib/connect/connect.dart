@@ -179,9 +179,32 @@ class ConnectController extends ChangeNotifier {
     final playing = _whoIsPlaying();
     if (playing != null && playing != _playing) _active = playing == _here ? null : playing;
     _playing = playing;
-    final active = _active;
-    if (active != null && !(client?.devices[active]?.online ?? false)) _active = null; // gone or offline
+    final active = activeDevice;
+    if (_active != null && !(active?.online ?? false)) {
+      _active = null; // gone or offline
+      if (active != null) unawaited(_keepHere(active));
+    }
     notifyListeners();
+  }
+
+  /// The device the app controlled went offline (closed, say): its music stays in the bar, here,
+  /// paused where it got to, instead of vanishing with it.
+  Future<void> _keepHere(Device device) async {
+    final state = device.state;
+    final queue = state?.queue;
+    if (state == null || queue == null || queue.isEmpty) return;
+    try {
+      await player.obey(
+        Command.setQueue(
+          queue: queue,
+          index: state.index ?? 0,
+          positionMs: client!.positionMs(device.id) ?? state.positionMs,
+          play: false,
+        ),
+      );
+    } on CommandFailed {
+      // nothing in it can be played here
+    }
   }
 
   /// This device if it plays; otherwise the other device that reported playing most recently.

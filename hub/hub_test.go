@@ -544,17 +544,13 @@ func TestOfflineDeviceStopsPlaying(t *testing.T) {
 	tv.expectDevice("phone", func(d Device) bool { return d.Online && d.State.Status == Paused })
 }
 
-func TestLastPlaybackPickedUp(t *testing.T) {
+func TestLastPlaybackMovesOnlyByPlaying(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
-	stateFrom := func(d *testDevice, id string) {
-		t.Helper()
-		for d.expect("state").DeviceID != id {
-		}
-	}
 	lastOn := func() string {
 		t.Helper()
+		time.Sleep(50 * time.Millisecond) // the report before reaches the hub
 		_, welcome := join(t, url, as("alice"), info("pc", Subsonic, controller))
 		if welcome.LastPlayback == nil {
 			return ""
@@ -562,28 +558,19 @@ func TestLastPlaybackPickedUp(t *testing.T) {
 		return welcome.LastPlayback.DeviceID
 	}
 	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
-	stateFrom(tv, "phone")
+	tv.expect("state")
 
-	// The same queue, paused, while the phone is on: the phone still has the music.
-	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
-	stateFrom(phone, "tv")
-	if got := lastOn(); got != "phone" {
-		t.Fatalf("last playback on %q while the phone is on", got)
-	}
-
-	// The phone closes. Another queue, paused, isn't picking it up; the same one is: an app that
-	// opened and loaded it.
+	// The phone closes, and the TV loads its music paused, as an app does when it opens or when the
+	// device it followed closes: that isn't playing, so the phone keeps it.
 	_ = phone.ws.Close()
 	tv.expectDevice("phone", func(d Device) bool { return !d.Online })
-	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs[:1]})
-	time.Sleep(50 * time.Millisecond)
-	if got := lastOn(); got != "phone" {
-		t.Fatalf("last playback on %q after another queue", got)
-	}
 	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
-	time.Sleep(50 * time.Millisecond)
-	if got := lastOn(); got != "tv" {
+	if got := lastOn(); got != "phone" {
 		t.Fatalf("last playback on %q after the TV loaded it", got)
+	}
+	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	if got := lastOn(); got != "tv" {
+		t.Fatalf("last playback on %q after the TV played", got)
 	}
 }
 

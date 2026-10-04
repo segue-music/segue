@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"slices"
 	"sync"
 )
 
@@ -20,34 +19,21 @@ type lastPlayback struct {
 	State      StampedState `json:"state"`
 }
 
-// noteLastPlayback updates the user's last playback after e reported. A device takes it over by
-// playing, or by picking it up; the device that has it also updates it while paused. A report
-// without a queue (an app that just opened, empty) never touches it. Call with h.mu held.
+// noteLastPlayback updates the user's last playback after e reported. A device takes it over only
+// by playing: loading it, as an app that opens does, doesn't. The device that has it also updates
+// it while paused. A report without a queue (an app that just opened, empty) never touches it.
+// Call with h.mu held.
 func (h *Hub) noteLastPlayback(e *entry) {
 	state := e.state
 	if state == nil || len(state.Queue) == 0 {
 		return
 	}
 	last := h.last[e.user]
-	holds := last != nil && last.DeviceID == e.info.ID
-	if state.Status != Playing && !holds && !h.picksUp(e, last) {
+	if state.Status != Playing && (last == nil || last.DeviceID != e.info.ID) {
 		return
 	}
 	h.last[e.user] = &lastPlayback{DeviceID: e.info.ID, DeviceName: e.info.Name, API: e.info.API, State: *state}
 	h.saveLast()
-}
-
-// picksUp tells whether e has the last playback's own queue while the device that holds it is
-// offline: an app that opened and loaded it, so that the music is now there. Call with h.mu held.
-func (h *Hub) picksUp(e *entry, last *lastPlayback) bool {
-	if last == nil {
-		return false
-	}
-	if holder := h.users[e.user][last.DeviceID]; holder != nil && holder.conn != nil {
-		return false
-	}
-	queue := h.translateQueue(e.state.Queue, e.info.API, last.API)
-	return slices.EqualFunc(queue, last.State.Queue, func(a, b QueueItem) bool { return a.ID != "" && a.ID == b.ID })
 }
 
 // freezeLastPlayback stops the clock of a last playback whose device went away while playing, at
