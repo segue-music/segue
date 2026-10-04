@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../segue/client.dart';
@@ -8,12 +10,16 @@ import 'album_page.dart';
 import 'cover.dart';
 import 'devices_sheet.dart';
 import 'now_playing_bar.dart';
-import 'search_page.dart';
+import 'search_results.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({required this.onSignOut, super.key});
 
   final VoidCallback onSignOut;
+
+  /// How long typing in the search bar has to stop before the search goes out, so that it isn't one
+  /// per key.
+  static const searchTypingPause = Duration(milliseconds: 300);
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -21,6 +27,12 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   Future<List<Album>>? _albums;
+  final _search = TextEditingController();
+  Timer? _typing;
+  String _query = '';
+
+  /// What the search bar found; null shows the albums.
+  Future<SearchResults>? _results;
 
   @override
   void didChangeDependencies() {
@@ -28,48 +40,115 @@ class _HomePageState extends State<HomePage> {
     _albums ??= ServicesScope.of(context).api.albums();
   }
 
+  void _typed(String text) {
+    _typing?.cancel();
+    _typing = Timer(HomePage.searchTypingPause, () => _searchFor(text));
+  }
+
+  void _searchFor(String text) {
+    _typing?.cancel();
+    final query = text.trim();
+    if (query == _query) return;
+    setState(() {
+      _query = query;
+      _results = query.isEmpty ? null : ServicesScope.of(context).api.search(query);
+    });
+  }
+
+  void _clearSearch() {
+    _search.clear();
+    _searchFor('');
+  }
+
+  @override
+  void dispose() {
+    _typing?.cancel();
+    _search.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final services = ServicesScope.of(context);
+    final results = _results;
+    final searchBar = SearchBar(
+      controller: _search,
+      hintText: 'Buscar álbum, artista ou música',
+      leading: const Icon(Icons.search),
+      trailing: [
+        ListenableBuilder(
+          listenable: _search,
+          builder: (context, _) => _search.text.isEmpty
+              ? const SizedBox.shrink()
+              : IconButton(tooltip: 'Limpar', icon: const Icon(Icons.close), onPressed: _clearSearch),
+        ),
+      ],
+      elevation: const WidgetStatePropertyAll(0),
+      constraints: const BoxConstraints(maxWidth: 600, minHeight: 44, maxHeight: 44),
+      textInputAction: TextInputAction.search,
+      onChanged: _typed,
+      onSubmitted: _searchFor,
+    );
+    // Next to the title when there is room for both; on a phone, on a line of its own under it.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Álbuns'),
+        title: narrow
+            ? const Text('Álbuns')
+            : Row(
+                children: [
+                  const Text('Álbuns'),
+                  const SizedBox(width: 24),
+                  Flexible(child: searchBar),
+                ],
+              ),
+        bottom: narrow
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(56),
+                child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 12), child: searchBar),
+              )
+            : null,
         actions: [
-          IconButton(
-            tooltip: 'Buscar',
-            icon: const Icon(Icons.search),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SearchPage())),
-          ),
           _HubStatus(client: services.connect.client),
           IconButton(tooltip: 'Aparelhos', icon: const Icon(Icons.devices), onPressed: () => showDevicesSheet(context)),
           IconButton(tooltip: 'Sair', icon: const Icon(Icons.logout), onPressed: widget.onSignOut),
         ],
       ),
-      body: FutureBuilder(
-        future: _albums,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text('Não consegui listar os álbuns: ${snapshot.error}'));
-          final albums = snapshot.data;
-          if (albums == null) return const Center(child: CircularProgressIndicator());
-          return RefreshIndicator(
-            onRefresh: () async {
-              final reload = services.api.albums();
-              setState(() => _albums = reload);
-              await reload;
-            },
-            child: GridView.builder(
-              padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 180,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: albums.length,
-              itemBuilder: (context, i) => _AlbumTile(albums[i]),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Kept underneath while searching, so that clearing the search goes back to the same place.
+          Offstage(
+            offstage: results != null,
+            child: FutureBuilder(
+              future: _albums,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return Center(child: Text('Não consegui listar os álbuns: ${snapshot.error}'));
+                final albums = snapshot.data;
+                if (albums == null) return const Center(child: CircularProgressIndicator());
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    final reload = services.api.albums();
+                    setState(() => _albums = reload);
+                    await reload;
+                  },
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 180,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 0.75,
+                    ),
+                    itemCount: albums.length,
+                    itemBuilder: (context, i) => _AlbumTile(albums[i]),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+          if (results != null) SearchResultsList(results),
+        ],
       ),
       bottomNavigationBar: const NowPlayingBar(),
     );
