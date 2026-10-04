@@ -149,7 +149,9 @@ hub sends each device news of the user's other devices:
   reference hub).
 
 An offline device stays listed with its last state, so its queue can still be picked up
-([section 6](#6-transfer)).
+([section 6](#6-transfer)). Its clock stops as it goes offline: a device that was playing is listed
+`paused`, at the position it had reached, and comes back online that way until it reports. Otherwise
+the other apps would take it, back before its first report, for a device that just started playing.
 
 ## 4. Player state and the clock
 
@@ -243,6 +245,9 @@ the hub's own record, separate from the devices' states:
 
 - a device takes it over by reporting `playing` with a queue; the device that holds it also
   updates it while paused (a seek, say);
+- a device also takes it over by reporting the last playback's own queue (the same ids) while the
+  device that holds it is offline: it is an app that opened and loaded it (below), so the music
+  is now there;
 - a report without a queue never touches it: an app that has just opened, empty, does not wipe it;
 - when the device that holds it goes offline while playing, its clock stops: the position becomes
   where playback had got to, and the status `paused`;
@@ -257,7 +262,8 @@ the hub's own record, separate from the devices' states:
 
 An app that opens with nothing playing anywhere shows it: on its device, if that device is
 online (the app then controls it); otherwise here, loaded paused at the same point, so that play
-continues it here.
+continues it here. Loading it makes this device the one that holds it, so an app opened next shows
+it here too.
 
 ## 8. Ids across APIs
 

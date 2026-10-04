@@ -231,8 +231,14 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 	if e.conn != conn {
 		return // a newer connection of the same device took over
 	}
-	e.conn, e.lastSeen = nil, h.opts.Now()
+	now := h.opts.Now()
+	e.conn, e.lastSeen = nil, now
 	h.failPending(e, "offline")
+	if e.state != nil {
+		// Offline, it doesn't play (SPEC.md, section 3). Left playing, it would come back announced
+		// as playing, before its first report, and the other apps would follow it.
+		e.state.pause(now.UnixMilli())
+	}
 	h.freezeLastPlayback(e)
 	h.announce(e)
 	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name)

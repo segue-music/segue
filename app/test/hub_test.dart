@@ -192,6 +192,25 @@ void main() {
     expect(phone.player.queue, isEmpty);
   });
 
+  test('an app opened after another one picked up the last playback shows it on that one', () async {
+    final user = newUser();
+    final second = await App(user, 'second').start();
+    await second.player.playQueue(songs);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await second.client.close(); // closed while playing
+    final fedora = await App(user, 'fedora').start();
+    await until(() => fedora.player.queue.isNotEmpty, 'the queue on fedora');
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final again = await App(user, 'second').start();
+    await until(() => again.connect.nowPlaying?.device == 'fedora', 'the second copy to show fedora');
+    expect(again.connect.nowPlaying?.playing, isFalse);
+    expect(again.player.queue, isEmpty);
+    // Fedora doesn't follow the copy that came back: it was playing when it closed, not now.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(fedora.connect.activeId, isNull);
+    expect(fedora.connect.nowPlaying?.device, isNull);
+  });
+
   test('starting to play on one device pauses the others', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();

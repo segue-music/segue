@@ -525,6 +525,68 @@ func TestLastPlayback(t *testing.T) {
 	}
 }
 
+func TestOfflineDeviceStopsPlaying(t *testing.T) {
+	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
+	url, _ := startHub(t, Options{Now: c.Now})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	phone.report(map[string]any{"status": "playing", "positionMs": 30000, "queue": songs})
+	tv.expect("state")
+
+	// Offline, it is paused where it had got to, and comes back paused: not as a device that has
+	// just started playing, before its first report.
+	c.advance(10 * time.Second)
+	_ = phone.ws.Close()
+	tv.expectDevice("phone", func(d Device) bool {
+		return !d.Online && d.State.Status == Paused && d.State.PositionMs == 40000
+	})
+	join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	tv.expectDevice("phone", func(d Device) bool { return d.Online && d.State.Status == Paused })
+}
+
+func TestLastPlaybackPickedUp(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	stateFrom := func(d *testDevice, id string) {
+		t.Helper()
+		for d.expect("state").DeviceID != id {
+		}
+	}
+	lastOn := func() string {
+		t.Helper()
+		_, welcome := join(t, url, as("alice"), info("pc", Subsonic, controller))
+		if welcome.LastPlayback == nil {
+			return ""
+		}
+		return welcome.LastPlayback.DeviceID
+	}
+	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	stateFrom(tv, "phone")
+
+	// The same queue, paused, while the phone is on: the phone still has the music.
+	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
+	stateFrom(phone, "tv")
+	if got := lastOn(); got != "phone" {
+		t.Fatalf("last playback on %q while the phone is on", got)
+	}
+
+	// The phone closes. Another queue, paused, isn't picking it up; the same one is: an app that
+	// opened and loaded it.
+	_ = phone.ws.Close()
+	tv.expectDevice("phone", func(d Device) bool { return !d.Online })
+	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs[:1]})
+	time.Sleep(50 * time.Millisecond)
+	if got := lastOn(); got != "phone" {
+		t.Fatalf("last playback on %q after another queue", got)
+	}
+	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
+	time.Sleep(50 * time.Millisecond)
+	if got := lastOn(); got != "tv" {
+		t.Fatalf("last playback on %q after the TV loaded it", got)
+	}
+}
+
 func TestLastPlaybackFollowsWhoPlays(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))

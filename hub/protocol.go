@@ -164,6 +164,15 @@ type StampedState struct {
 	At int64 `json:"at"`
 }
 
+// pause stops the clock of a playing state at hub time now (epoch ms), where playback had got to.
+func (s *StampedState) pause(now int64) {
+	if s.Status != Playing {
+		return
+	}
+	s.PositionMs = s.positionAt(now)
+	s.Status, s.At = Paused, now
+}
+
 // positionAt is where playback is at hub time now (epoch ms), extrapolated from the last report.
 func (s *StampedState) positionAt(now int64) int64 {
 	if s.Status != Playing {
