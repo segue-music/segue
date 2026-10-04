@@ -1,7 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:segue/television.dart';
+import 'package:segue/device.dart';
 
 const channel = MethodChannel('segue/device');
 
@@ -31,5 +33,14 @@ void main() {
     expect(await isTelevision(), isFalse);
     await adaptToTelevision();
     expect(FocusManager.instance.highlightStrategy, FocusHighlightStrategy.automatic);
+  });
+
+  test('the device goes by the name its system gives it (on Android, its settings), not the system\'s', () async {
+    messenger.setMockMethodCallHandler(channel, (call) async => call.method == 'deviceName' ? 'TV do quarto' : null);
+    expect(await systemDeviceName(), 'TV do quarto');
+  });
+
+  test('where the platform has no such channel (Linux), it goes by the computer\'s name', () async {
+    expect(await systemDeviceName(), Platform.localHostname);
   });
 }
