@@ -1,0 +1,42 @@
+# Codemagic builds the iOS version on its Macs, signs it and uploads it to App Store Connect, where
+# it reaches TestFlight's internal testers. The setup it needs, once, is in app/README.md ("Running
+# on iOS"). A build starts from Codemagic's page, or by pushing a tag: git tag ios-1 && git push origin ios-1
+workflows:
+  ios:
+    name: iOS to TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: app
+    integrations:
+      # The App Store Connect API key, under this name in Codemagic's team integrations.
+      app_store_connect: segue
+    environment:
+      flutter: 3.47.6
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: io.github.mateusguilherme.segue
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'ios-*'
+    scripts:
+      - name: Signing settings
+        # The iOS project only: macos/ has a Runner.xcodeproj too.
+        script: xcode-project use-profiles --project ios/Runner.xcodeproj
+      - name: Packages
+        script: flutter pub get
+      - name: Build
+        script: |
+          # The build number is the commit count, as on Android: each upload needs a higher one.
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then git fetch --unshallow; fi
+          flutter build ipa --release \
+            --build-number="$(git rev-list --count HEAD)" \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - $CM_BUILD_DIR/app/build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration

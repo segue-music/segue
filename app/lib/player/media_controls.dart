@@ -10,16 +10,17 @@ import '../segue/protocol.dart';
 import '../subsonic/api.dart';
 
 /// The system's media controls (MPRIS on Linux: media keys, the desktop's player widget, KDE
-/// Connect...) for what the now-playing bar shows: this device's playback, or the device it follows.
+/// Connect...; Now Playing on iOS: the lock screen, Control Center, CarPlay, headphone buttons) for
+/// what the now-playing bar shows: this device's playback, or the device it follows.
 class MediaControls extends BaseAudioHandler with SeekHandler {
   ConnectController? _connect;
   SubsonicApi? _api;
   Timer? _tick;
 
   /// Starts the system's media service, on the platforms where the app sets it up: Linux (MPRIS)
-  /// for now. Null when it can't, e.g. without a D-Bus session.
+  /// and iOS for now. Null when it can't, e.g. without a D-Bus session.
   static Future<MediaControls?> start() async {
-    if (!Platform.isLinux) return null;
+    if (!Platform.isLinux && !Platform.isIOS) return null;
     try {
       return await AudioService.init(
         builder: MediaControls.new,

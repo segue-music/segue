@@ -53,7 +53,7 @@ tool/flutter.sh test
 tool/flutter.sh test test/player_test.dart    # one file
 tool/flutter.sh test --plain-name 'a refused hello is a final HubClosed'
 tool/package-linux.sh                         # release build → build/segue-linux-x64.tar.gz
-DART=1 tool/flutter.sh run tool/icons.dart    # every icon (Android, TV banner, Linux) from tool/icon.png
+DART=1 tool/flutter.sh run tool/icons.dart    # every icon (Android, TV banner, Linux, iOS) from tool/icon.png
 ```
 
 The Android build (phones and Android TV) uses a second image, with the JDK and Android SDK/NDK:
@@ -62,6 +62,11 @@ The Android build (phones and Android TV) uses a second image, with the JDK and 
 docker build -t segue-flutter-android -f tool/android.Dockerfile tool
 tool/package-android.sh                       # → build/segue-android.apk (debug-signed, every ABI)
 ```
+
+The iOS build needs a Mac, so it runs on Codemagic (`codemagic.yaml` at the root), which signs it
+and uploads it to TestFlight. It starts from Codemagic's page or with a tag: `git tag ios-<n> && git
+push origin ios-<n>`. Nothing iOS-specific can run here: `Info.plist` and the Xcode project are only
+checked by that build.
 
 With Flutter installed locally, the same commands work as `flutter ...` (`flutter run -d linux`).
 
@@ -122,7 +127,10 @@ Running two app instances on one machine as different devices:
 - `lib/segue/`: protocol types, the client (reconnects with backoff; stops on final close codes
   4001/4002/4003) and hub discovery (`/connect/v1/info` next to the server).
 - `MediaControls` (`lib/player/media_controls.dart`) mirrors `connect.nowPlaying` to the system's
-  media controls. Linux (MPRIS) only for now.
+  media controls: Linux (MPRIS) and iOS (Now Playing, also CarPlay's) for now.
+- `AudioInterruptions` (`lib/player/audio_interruptions.dart`), on iOS only, sets the audio session
+  up for music and pauses the local player for calls (resuming after, when iOS says to) and when the
+  car or headphones go away. libmpv knows of neither.
 - `Session` keeps the Subsonic token and salt in secure storage and everything else in
   `shared_preferences`. The password itself is never stored.
 - Android TV: the remote drives the app through focus. `segueTheme` (`lib/ui/theme.dart`) gives

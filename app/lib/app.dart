@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'player/audio_interruptions.dart';
 import 'player/media_controls.dart';
 import 'services.dart';
 import 'session.dart';
@@ -9,13 +10,16 @@ import 'ui/shortcuts.dart';
 import 'ui/theme.dart';
 
 class SegueApp extends StatefulWidget {
-  const SegueApp({required this.session, this.mediaControls, this.television = false, super.key});
+  const SegueApp({required this.session, this.mediaControls, this.interruptions, this.television = false, super.key});
 
   /// The saved session, if any: then the app opens straight on the library.
   final Session? session;
 
   /// The system's media controls, where the platform has them.
   final MediaControls? mediaControls;
+
+  /// Calls and the like pausing this device's playback, where the platform has them.
+  final AudioInterruptions? interruptions;
 
   /// Whether it runs on a TV, driven by a remote's D-pad.
   final bool television;
@@ -49,6 +53,7 @@ class _SegueAppState extends State<SegueApp> {
       }
       setState(() => _services = services);
       widget.mediaControls?.attach(services.connect, services.api);
+      widget.interruptions?.attach(services.player);
     } on Exception catch (e) {
       if (mounted) setState(() => _error = e);
     } finally {
@@ -63,6 +68,7 @@ class _SegueAppState extends State<SegueApp> {
       _error = null;
     });
     widget.mediaControls?.attach(null, null);
+    widget.interruptions?.attach(null);
     await services?.dispose();
     await Session.clear();
   }

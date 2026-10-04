@@ -4,6 +4,7 @@
 // - Android: the launcher icon, adaptive (Android 8 and later, mipmap-anydpi-v26/ic_launcher.xml) and as a plain image
 //   before that, and the Android TV banner.
 // - Linux: the window's icon, also the one of the menu entry that install-desktop-entry.sh adds.
+// - iOS: one 1024 px icon, from which Xcode makes the smaller ones.
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -32,6 +33,12 @@ void main() {
   // The Android TV banner, 320 × 180 dp: the artwork with its glow, on its own background.
   _write('$_res/drawable-xhdpi/banner.png', art.banner(640, 360));
   _write('linux/runner/resources/app_icon.png', art.shape(256, 0.84));
+  // iOS cuts the icon to its own rounded square, so it is the artwork's square from edge to edge, the note as big in it
+  // as in the artwork. Opaque: App Store Connect refuses an icon with an alpha channel.
+  _write(
+    'ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png',
+    art.inside(1024, 2 * _note / (_right - _left)).convert(numChannels: 3),
+  );
 }
 
 void _write(String path, Image image) {

@@ -19,16 +19,20 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   same point. If the device it controls closes, its music stays here, paused. An app opened when
   nothing plays anywhere picks up where the music was.
 
-- the system's media controls on Linux (MPRIS, through `audio_service`): media keys, the
-  desktop's player widget and KDE Connect show and command what the now-playing bar shows, the
-  device it follows included;
+- the system's media controls (through `audio_service`) show and command what the now-playing bar
+  shows, the device it follows included: on Linux (MPRIS) the media keys, the desktop's player
+  widget and KDE Connect; on iOS (Now Playing) the lock screen, Control Center, headphone buttons
+  and CarPlay's Now Playing screen;
+- on iOS, playing in the background and with the silent switch on; a call pauses the music, which
+  plays again after it, and leaving the car or unplugging the headphones pauses it;
 - its icon (made by `tool/icons.dart` from `tool/icon.png`): Android's launcher icon, adaptive from
-  Android 8 on, the Android TV banner, and on Linux the window's icon and an entry in the
-  application menu.
+  Android 8 on, the Android TV banner, on Linux the window's icon and an entry in the application
+  menu, and the iOS icon.
 
-Not yet: playlists, the queue on screen, the media controls on the other
-platforms (Android's media session, iOS's Now Playing), an offline cache, settings, and the
-iOS build. The Android build (phones and Android TV) has not been tried on a device yet.
+Not yet: playlists, the queue on screen, the media controls on the other platforms (Android's
+media session), an offline cache, settings, and CarPlay as an app of its own (browsing the library
+on the car's screen, which needs Apple's CarPlay entitlement and native code). The Android build
+(phones and Android TV) and the iOS build have not been tried on a device yet.
 
 ## Code
 
@@ -36,7 +40,7 @@ iOS build. The Android build (phones and Android TV) has not been tried on a dev
 |---|---|
 | `lib/subsonic/` | The Subsonic API: token sign-in, albums, artists, songs, search, stream and cover URLs |
 | `lib/segue/` | The Segue protocol in Dart, the hub client (reconnects by itself) and hub discovery |
-| `lib/player/` | `PlayerController` (queue, commands, state reports) over an `AudioEngine`; `MediaKitEngine` is the real one. `MediaControls`: the system's media controls |
+| `lib/player/` | `PlayerController` (queue, commands, state reports) over an `AudioEngine`; `MediaKitEngine` is the real one. `MediaControls`: the system's media controls. `AudioInterruptions`: calls and the like pausing the music, on iOS |
 | `lib/connect/` | `ConnectController`: which device the app controls, and moving the music between devices |
 | `lib/ui/` | The pages: sign-in, albums, artists, album, artist, search, player bar and full-screen player, device picker |
 | `test/` | Unit and widget tests, and tests against the real Go hub (`hub_test.dart`) |
@@ -119,6 +123,45 @@ adb install -r segue-android.apk
 Newer Google TVs offer wireless debugging instead: `adb pair` with the address and code the TV
 shows, then `adb connect`. The TV has to reach the media server (and the hub) at the address used
 to sign in.
+
+## Running on iOS
+
+The iOS version needs a Mac to build, so it is built on Codemagic's (`../codemagic.yaml`), which
+signs it and uploads it to App Store Connect; the iPhone installs it from TestFlight. That takes a
+paid Apple Developer Program membership. Codemagic's free plan has enough build minutes for a few
+builds a week.
+
+Once, on the web, with nothing to install:
+
+1. In the Apple Developer site, under Certificates, Identifiers & Profiles, register the app's
+   identifier: an explicit App ID `io.github.mateusguilherme.segue`, with no extra capabilities.
+2. In App Store Connect, create the app with that bundle ID. Its name there has to be unique in the
+   App Store; the home screen shows "Segue" whatever it is. In its TestFlight tab, make an internal
+   testing group with yourself in it and automatic distribution on, so that each build reaches it.
+3. In App Store Connect, under Users and Access > Integrations, make an App Store Connect API key
+   with the App Manager role. Its `.p8` file downloads only once; note its Key ID and the Issuer ID.
+4. In Codemagic, sign in with GitHub and add this repository. In the team's integrations, add the
+   key under Developer Portal, named `segue` (the name `codemagic.yaml` asks for).
+5. In Codemagic's code signing identities, generate an Apple Distribution certificate with that
+   key. Then, in the Apple Developer site, make an App Store Connect provisioning profile for the
+   App ID with that certificate, and fetch it in Codemagic.
+
+Then each build starts from Codemagic's page (workflow "iOS to TestFlight") or by pushing a tag
+starting with `ios-`:
+
+```sh
+git tag ios-1 && git push origin ios-1
+```
+
+It takes about 15 minutes, plus Apple's processing. The build then shows in the TestFlight app on the
+iPhone, from the internal group's invitation, for 90 days. The first time the app reaches a server
+in the local network, iOS asks for permission.
+
+What iOS does differently:
+- In the background, iOS keeps the app running only while it plays. Paused, or just controlling
+  another device, it is suspended after a while, and the hub sees it leave until it is opened again.
+- In a car, the music shows in CarPlay's Now Playing screen, with its controls, but the app has no
+  screen of its own there.
 
 ## Building and testing without Flutter installed
 
