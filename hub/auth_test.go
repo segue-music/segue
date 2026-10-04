@@ -3,6 +3,7 @@ package hub
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,11 +19,14 @@ func fakeMediaServer(t *testing.T) (string, *atomic.Int32) {
 		calls.Add(1)
 		q := r.URL.Query()
 		subsonic := func(body map[string]any) {
+			body["type"] = "navidrome"
 			_ = json.NewEncoder(w).Encode(map[string]any{"subsonic-response": body})
 		}
 		switch r.URL.Path {
 		case "/rest/ping.view":
-			if q.Get("u") == "alice" && q.Get("t") == "good" && q.Get("c") == clientName {
+			if q.Get("u") == "" {
+				subsonic(map[string]any{"status": "failed", "error": map[string]any{"code": 10}})
+			} else if q.Get("u") == "alice" && q.Get("t") == "good" && q.Get("c") == clientName {
 				subsonic(map[string]any{"status": "ok"})
 			} else {
 				subsonic(map[string]any{"status": "failed", "error": map[string]any{"code": 40}})
@@ -101,5 +105,61 @@ func TestUpstreamAuthenticatorErrorsDontLeakCredentials(t *testing.T) {
 	_, _, err = UpstreamAuthenticator(KindSubsonic, "http://127.0.0.1:1", 0)(context.Background(), Auth{Scheme: "subsonic", Username: "alice", Token: "secret-token", Salt: "secret-salt"})
 	if err == nil || strings.Contains(err.Error(), "secret") {
 		t.Fatalf("error %v", err)
+	}
+}
+
+func TestDetectUpstream(t *testing.T) {
+	navidrome, _ := fakeMediaServer(t)
+	serve := func(handler http.HandlerFunc) string {
+		server := httptest.NewServer(handler)
+		t.Cleanup(server.Close)
+		return server.URL
+	}
+	otherSubsonic := serve(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/music/rest/ping.view" || r.URL.Query().Get("f") != "json" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"subsonic-response":{"status":"failed","version":"1.16.1","type":"gonic","error":{"code":10}}}`))
+	})
+	jellyfin := serve(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/System/Info/Public" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ServerName":"music","Version":"10.10.7","ProductName":"Jellyfin Server","Id":"4f6e1b2c"}`))
+	})
+	for _, c := range []struct {
+		name, url string
+		kind      UpstreamKind
+	}{
+		{"navidrome", navidrome, KindNavidrome},
+		{"navidrome, with a slash", navidrome + "/", KindNavidrome},
+		{"another subsonic server, under a path", otherSubsonic + "/music", KindSubsonic},
+		{"jellyfin", jellyfin, KindJellyfin},
+	} {
+		kind, err := DetectUpstream(context.Background(), c.url)
+		if err != nil || kind != c.kind {
+			t.Errorf("%s: got %q %v, want %q", c.name, kind, err, c.kind)
+		}
+	}
+}
+
+func TestDetectUpstreamTellsAWrongURLFromOneThatIsDown(t *testing.T) {
+	website := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("<!doctype html><title>Not a media server</title>"))
+	}))
+	defer website.Close()
+	if _, err := DetectUpstream(context.Background(), website.URL); !errors.Is(err, ErrNotAMediaServer) {
+		t.Errorf("a website: got %v, want ErrNotAMediaServer", err)
+	}
+	starting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway) // the proxy, while the media server starts
+	}))
+	defer starting.Close()
+	for _, url := range []string{starting.URL, "http://127.0.0.1:1"} {
+		if _, err := DetectUpstream(context.Background(), url); err == nil || errors.Is(err, ErrNotAMediaServer) {
+			t.Errorf("%s: got %v, want an error to retry on", url, err)
+		}
 	}
 }

@@ -28,6 +28,76 @@ const (
 	KindJellyfin  UpstreamKind = "jellyfin"
 )
 
+// ErrNotAMediaServer is DetectUpstream's answer for a URL that answers, but as neither a Subsonic
+// nor a Jellyfin server.
+var ErrNotAMediaServer = errors.New("neither a Subsonic nor a Jellyfin server")
+
+// DetectUpstream asks the media server at baseURL what it is: its answer to a Subsonic ping without
+// credentials (whose OpenSubsonic type says Navidrome), or else to Jellyfin's public system info.
+// Any error other than ErrNotAMediaServer means it couldn't be asked (network error, HTTP 5xx), and
+// asking again may work.
+func DetectUpstream(ctx context.Context, baseURL string) (UpstreamKind, error) {
+	base := strings.TrimRight(baseURL, "/")
+	client := &http.Client{Timeout: 5 * time.Second}
+	var ping struct {
+		Response *struct {
+			Type string `json:"type"`
+		} `json:"subsonic-response"`
+	}
+	subsonicErr := probe(ctx, client, base+"/rest/ping.view?v=1.16.1&c="+clientName+"&f=json", &ping)
+	if subsonicErr == nil && ping.Response != nil {
+		if ping.Response.Type == "navidrome" {
+			return KindNavidrome, nil
+		}
+		return KindSubsonic, nil
+	}
+	var info struct {
+		ID string `json:"Id"`
+	}
+	jellyfinErr := probe(ctx, client, base+"/System/Info/Public", &info)
+	if jellyfinErr == nil && info.ID != "" {
+		return KindJellyfin, nil
+	}
+	for _, err := range []error{subsonicErr, jellyfinErr} {
+		if err != nil && !errors.Is(err, errNotThere) {
+			return "", err
+		}
+	}
+	return "", ErrNotAMediaServer
+}
+
+// errNotThere is probe's answer for an endpoint that answers, but not with JSON.
+var errNotThere = errors.New("not there")
+
+// probe decodes a JSON answer into out. It returns errNotThere for an HTTP 4xx or an answer that
+// isn't JSON, and other errors for a failure that may go away.
+func probe(ctx context.Context, client *http.Client, target string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return err
+	}
+	endpoint, _, _ := strings.Cut(target, "?")
+	res, err := client.Do(req)
+	if err != nil {
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err // its message repeats the URL
+		}
+		return fmt.Errorf("%s: %w", endpoint, err)
+	}
+	defer res.Body.Close()
+	switch {
+	case res.StatusCode/100 == 4:
+		return errNotThere
+	case res.StatusCode/100 != 2:
+		return fmt.Errorf("%s: HTTP %d", endpoint, res.StatusCode)
+	}
+	if json.NewDecoder(res.Body).Decode(out) != nil {
+		return errNotThere
+	}
+	return nil
+}
+
 // DevAuthenticator accepts anyone: Subsonic credentials as the username they claim, anything else
 // as "dev". For demos and tests only.
 func DevAuthenticator(_ context.Context, auth Auth) (string, bool, error) {

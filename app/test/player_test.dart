@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:segue/player/player.dart';
 import 'package:segue/segue/client.dart';
 import 'package:segue/segue/protocol.dart';
+import 'package:segue/server/models.dart';
 import 'package:segue/subsonic/api.dart';
-import 'package:segue/subsonic/models.dart';
 
 import 'fakes.dart';
 

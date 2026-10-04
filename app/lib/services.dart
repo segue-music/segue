@@ -8,10 +8,9 @@ import 'player/player.dart';
 import 'segue/client.dart';
 import 'segue/discovery.dart';
 import 'segue/protocol.dart';
+import 'server/server.dart';
+import 'server/sign_in.dart';
 import 'session.dart';
-import 'subsonic/api.dart';
-
-const appVersion = '0.1.0';
 
 /// Everything a signed-in session runs on.
 class Services {
@@ -19,24 +18,25 @@ class Services {
 
   /// Starts a session: the API, this device's player and, if a hub is found, the connection to it.
   static Future<Services> start(Session session, {AudioEngine? engine}) async {
-    final api = SubsonicApi(session.server, session.credentials);
+    final api = openServer(
+      session.server,
+      session.credentials,
+      deviceId: session.deviceId,
+      deviceName: session.deviceName,
+    );
     final player = PlayerController(engine ?? MediaKitEngine(), api);
     final hubUrl = await discoverHub(session.server, hub: session.hub);
     final client = hubUrl == null
         ? null
         : SegueClient(
             url: hubUrl,
-            auth: Auth.subsonic(
-              username: session.credentials.username,
-              token: session.credentials.token,
-              salt: session.credentials.salt,
-            ),
+            auth: api.auth,
             device: DeviceInfo(
               id: session.deviceId,
               name: session.deviceName,
-              client: SubsonicApi.clientName,
+              client: clientName,
               version: appVersion,
-              api: Api.subsonic,
+              api: api.api,
               roles: Role.values,
               capabilities: CommandAction.values,
             ),
@@ -47,7 +47,7 @@ class Services {
   }
 
   final Session session;
-  final SubsonicApi api;
+  final MediaServer api;
   final PlayerController player;
   final ConnectController connect;
 

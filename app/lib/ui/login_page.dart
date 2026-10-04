@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
+import '../server/server.dart';
+import '../server/sign_in.dart';
 import '../session.dart';
-import '../subsonic/api.dart';
 
-/// Server, user and password: the media server's own account, nothing else to create.
+/// Server, user and password: the media server's own account, nothing else to create. Whether the
+/// server speaks Subsonic or Jellyfin, the app finds out.
 class LoginPage extends StatefulWidget {
-  const LoginPage({required this.onSignedIn, super.key});
+  const LoginPage({required this.onSignedIn, @visibleForTesting this.client, super.key});
 
   final void Function(Session session) onSignedIn;
+
+  /// What talks to the media server, for tests.
+  final http.Client? client;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -37,16 +43,24 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     final server = normalizeServer(_server.text);
-    final credentials = SubsonicCredentials.fromPassword(_username.text.trim(), _password.text);
-    final api = SubsonicApi(server, credentials);
+    MediaServer? api;
     try {
-      await api.ping();
+      final deviceId = await Session.thisDeviceId();
+      final deviceName = await Session.thisDeviceName();
+      api = await signIn(
+        server,
+        _username.text.trim(),
+        _password.text,
+        deviceId: deviceId,
+        deviceName: deviceName,
+        client: widget.client,
+      );
       final hub = _hub.text.trim();
       final session = Session(
         server: server,
-        credentials: credentials,
-        deviceId: await Session.thisDeviceId(),
-        deviceName: await Session.thisDeviceName(),
+        credentials: api.credentials,
+        deviceId: deviceId,
+        deviceName: deviceName,
         hub: hub.isEmpty ? null : normalizeServer(hub),
       );
       try {
@@ -56,12 +70,14 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
       widget.onSignedIn(session);
-    } on SubsonicError catch (e) {
+    } on NotAMediaServer {
+      setState(() => _error = 'Não achei um servidor Subsonic nem Jellyfin em ${server.host}.');
+    } on ServerError catch (e) {
       setState(() => _error = e.isAuth ? 'Usuário ou senha errados.' : 'O servidor recusou: $e');
     } on Exception catch (e) {
       setState(() => _error = 'Não consegui falar com ${server.host}: $e');
     } finally {
-      api.close();
+      api?.close();
       if (mounted) setState(() => _busy = false);
     }
   }

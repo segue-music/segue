@@ -4,8 +4,8 @@ import 'package:http/testing.dart';
 import 'package:segue/connect/connect.dart';
 import 'package:segue/player/media_controls.dart';
 import 'package:segue/player/player.dart';
+import 'package:segue/server/models.dart';
 import 'package:segue/subsonic/api.dart';
-import 'package:segue/subsonic/models.dart';
 
 import 'fakes.dart';
 

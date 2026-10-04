@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../server/models.dart';
 import '../services.dart';
-import '../subsonic/models.dart';
 
 /// Builds a song's tile knowing whether it is the current song (the one the device the app
 /// controls plays, or has paused) and whether it plays. Lists mark the current song as Spotify

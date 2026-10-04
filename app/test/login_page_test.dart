@@ -1,9 +1,18 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:segue/app.dart';
+import 'package:segue/jellyfin/api.dart';
 import 'package:segue/session.dart';
 import 'package:segue/ui/login_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 /// Whether the text field labelled [label] has the focus.
 bool focused(WidgetTester tester, String label) => tester
@@ -13,7 +22,20 @@ bool focused(WidgetTester tester, String label) => tester
     .focusNode
     .hasFocus;
 
+Future<void> fillIn(WidgetTester tester, {required String server}) async {
+  await tester.enterText(find.widgetWithText(TextFormField, 'Servidor'), server);
+  await tester.enterText(find.widgetWithText(TextFormField, 'Usuário'), 'alice');
+  await tester.enterText(find.widgetWithText(TextFormField, 'Senha'), 'sesame');
+  await tester.tap(find.text('Entrar'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  SharedPreferencesAsyncPlatform.instance = InMemorySharedPreferencesAsync.empty();
+  FlutterSecureStorage.setMockInitialValues({});
+  // The system's name for the device comes from a platform channel, which doesn't answer here.
+  setUpAll(() => SharedPreferencesAsync().setString('deviceName', 'laptop'));
+
   testWidgets('asks for server, user and password before trying', (tester) async {
     var signedIn = false;
     await tester.pumpWidget(MaterialApp(home: LoginPage(onSignedIn: (_) => signedIn = true)));
@@ -54,6 +76,40 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pump();
     expect(focused(tester, 'Usuário'), isTrue);
+  });
+
+  testWidgets('a Jellyfin server is found by its address alone, and signed in to', (tester) async {
+    Session? signedIn;
+    final client = MockClient((request) async {
+      final body = switch (request.url.path) {
+        '/System/Info/Public' => {'Id': 'abc', 'Version': '10.10.7'},
+        '/Users/AuthenticateByName' => {
+          'User': {'Name': 'alice', 'Id': 'u1'},
+          'AccessToken': 't1',
+        },
+        _ => null,
+      };
+      return body == null ? http.Response('', 404) : http.Response(jsonEncode(body), 200);
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginPage(onSignedIn: (session) => signedIn = session, client: client),
+      ),
+    );
+    await fillIn(tester, server: 'music.test');
+    expect(signedIn?.server, Uri.parse('https://music.test'));
+    expect(signedIn?.credentials, isA<JellyfinCredentials>().having((c) => c.token, 'token', 't1'));
+  });
+
+  testWidgets('an address with no media server says so', (tester) async {
+    final client = MockClient((_) async => http.Response('<!doctype html>', 200));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginPage(onSignedIn: (_) {}, client: client),
+      ),
+    );
+    await fillIn(tester, server: 'example.test');
+    expect(find.text('Não achei um servidor Subsonic nem Jellyfin em example.test.'), findsOneWidget);
   });
 
   test('a server typed without a scheme is https', () {

@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../segue/client.dart';
 import '../segue/protocol.dart';
+import '../server/models.dart';
 import '../services.dart';
-import '../subsonic/models.dart';
 import 'albums_view.dart';
 import 'artists_view.dart';
 import 'devices_sheet.dart';

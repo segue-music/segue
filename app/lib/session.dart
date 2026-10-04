@@ -6,10 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'device.dart';
+import 'jellyfin/api.dart';
+import 'segue/protocol.dart';
+import 'server/server.dart';
 import 'subsonic/api.dart';
 
-/// Who is signed in, where, and as which device. The token and salt are as good as the password
-/// on that server, so they go to the system's secure storage; the rest to plain preferences.
+/// Who is signed in, where, and as which device. The token (and Subsonic's salt) is as good as the
+/// password on that server, so it goes to the system's secure storage; the rest to plain
+/// preferences.
 class Session {
   const Session({
     required this.server,
@@ -20,7 +24,9 @@ class Session {
   });
 
   final Uri server;
-  final SubsonicCredentials credentials;
+
+  /// `SubsonicCredentials` or `JellyfinCredentials`, by the API the server speaks.
+  final Credentials credentials;
 
   /// Stable for this installation: the hub knows the device by it.
   final String deviceId;
@@ -37,6 +43,9 @@ class Session {
   static Future<Session?> load() async {
     final server = await _prefs.getString('server');
     final username = await _prefs.getString('username');
+    // Sessions saved before the app spoke Jellyfin say no API: they are Subsonic's.
+    final api = await _prefs.getString('api') ?? Api.subsonic.name;
+    final userId = await _prefs.getString('userId');
     final String? token, salt;
     try {
       token = await _secure.read(key: 'token');
@@ -45,11 +54,19 @@ class Session {
       debugPrint('secure storage unavailable: $e');
       return null;
     }
-    if (server == null || username == null || token == null || salt == null) return null;
+    if (server == null || username == null || token == null) return null;
+    final Credentials credentials;
+    if (api == Api.jellyfin.name && userId != null) {
+      credentials = JellyfinCredentials(username: username, userId: userId, token: token);
+    } else if (api == Api.subsonic.name && salt != null) {
+      credentials = SubsonicCredentials(username: username, token: token, salt: salt);
+    } else {
+      return null;
+    }
     final hub = await _prefs.getString('hub');
     return Session(
       server: Uri.parse(server),
-      credentials: SubsonicCredentials(username: username, token: token, salt: salt),
+      credentials: credentials,
       deviceId: await thisDeviceId(),
       deviceName: await thisDeviceName(),
       hub: hub == null ? null : Uri.parse(hub),
@@ -64,8 +81,18 @@ class Session {
     } else {
       await _prefs.setString('hub', hub.toString());
     }
-    await _secure.write(key: 'token', value: credentials.token);
-    await _secure.write(key: 'salt', value: credentials.salt);
+    switch (credentials) {
+      case SubsonicCredentials(:final token, :final salt):
+        await _prefs.setString('api', Api.subsonic.name);
+        await _prefs.remove('userId');
+        await _secure.write(key: 'token', value: token);
+        await _secure.write(key: 'salt', value: salt);
+      case JellyfinCredentials(:final userId, :final token):
+        await _prefs.setString('api', Api.jellyfin.name);
+        await _prefs.setString('userId', userId);
+        await _secure.write(key: 'token', value: token);
+        await _secure.delete(key: 'salt');
+    }
   }
 
   /// Signs out. The device id stays: it is this installation's, not the session's.
@@ -73,6 +100,7 @@ class Session {
     await _secure.delete(key: 'token');
     await _secure.delete(key: 'salt');
     await _prefs.remove('username');
+    await _prefs.remove('userId');
   }
 
   // SEGUE_DEVICE_ID and SEGUE_DEVICE_NAME let a second copy of the app on the same computer, with

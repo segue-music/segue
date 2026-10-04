@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:segue/server/server.dart';
 import 'package:segue/subsonic/api.dart';
 
 http.Response subsonic(Map<String, Object?> body) =>
@@ -52,7 +53,7 @@ void main() {
         }),
       ),
     );
-    await expectLater(api.ping(), throwsA(isA<SubsonicError>().having((e) => e.isAuth, 'isAuth', isTrue)));
+    await expectLater(api.ping(), throwsA(isA<ServerError>().having((e) => e.isAuth, 'isAuth', isTrue)));
   });
 
   test('albums and an album with its songs', () async {

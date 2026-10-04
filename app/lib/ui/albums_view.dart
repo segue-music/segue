@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../server/models.dart';
 import '../services.dart';
-import '../subsonic/models.dart';
 import 'album_page.dart';
 import 'cover.dart';
 import 'focus_ring.dart';

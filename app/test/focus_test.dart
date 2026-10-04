@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:segue/subsonic/models.dart';
+import 'package:segue/server/models.dart';
 import 'package:segue/ui/albums_view.dart';
 import 'package:segue/ui/theme.dart';
 

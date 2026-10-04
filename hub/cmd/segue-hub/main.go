@@ -23,19 +23,36 @@ func main() {
 		os.Exit(1)
 	}
 
-	kind := hub.UpstreamKind(env("SEGUE_UPSTREAM_KIND", string(hub.KindNavidrome)))
-	if kind != hub.KindNavidrome && kind != hub.KindSubsonic && kind != hub.KindJellyfin {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	kind := hub.UpstreamKind(os.Getenv("SEGUE_UPSTREAM_KIND"))
+	if kind != "" && kind != hub.KindNavidrome && kind != hub.KindSubsonic && kind != hub.KindJellyfin {
 		fail("SEGUE_UPSTREAM_KIND must be navidrome, subsonic or jellyfin", "got", kind)
 	}
 	upstream := os.Getenv("SEGUE_UPSTREAM")
+	devAuth := os.Getenv("SEGUE_AUTH") == "none"
+	if upstream == "" && !devAuth {
+		fail("SEGUE_UPSTREAM is required (the media server's URL)")
+	}
+	if kind == "" && upstream == "" {
+		kind = hub.KindNavidrome // SEGUE_AUTH=none with no media server: nothing to ask
+	} else if kind == "" {
+		var err error
+		kind, err = detectUpstream(ctx, log, upstream)
+		if ctx.Err() != nil {
+			return
+		} else if err != nil {
+			fail("can't tell what the media server is: set SEGUE_UPSTREAM_KIND", "upstream", upstream, "err", err)
+		}
+		log.Info("media server found", "upstream", upstream, "kind", kind)
+	}
 
 	var authenticate hub.Authenticator
 	var report hub.Reporter
-	if os.Getenv("SEGUE_AUTH") == "none" {
+	if devAuth {
 		log.Warn("SEGUE_AUTH=none: every device is accepted, as the user it claims. Never expose this.")
 		authenticate = hub.DevAuthenticator
-	} else if upstream == "" {
-		fail("SEGUE_UPSTREAM is required (the media server's URL)")
 	} else {
 		authenticate = hub.UpstreamAuthenticator(kind, upstream, 5*time.Minute)
 		if kind != hub.KindJellyfin {
@@ -58,8 +75,6 @@ func main() {
 	server := &http.Server{Handler: h.Handler(map[string]any{"server": kind}), ReadHeaderTimeout: 10 * time.Second}
 	log.Info("hub listening", "url", "http://"+listener.Addr().String(), "upstream", upstream, "kind", kind)
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	go func() {
 		sweep := time.NewTicker(10 * time.Minute)
 		defer sweep.Stop()
@@ -80,6 +95,25 @@ func main() {
 	}
 	<-ctx.Done() // Serve returns as Shutdown starts; let it finish
 	h.Close()
+}
+
+// detectUpstream asks the media server what it is until it answers, since it may be starting at
+// the same time as the hub. A URL that answers as no media server is an error.
+func detectUpstream(ctx context.Context, log *slog.Logger, upstream string) (hub.UpstreamKind, error) {
+	wait := time.Second
+	for {
+		kind, err := hub.DetectUpstream(ctx, upstream)
+		if err == nil || errors.Is(err, hub.ErrNotAMediaServer) {
+			return kind, err
+		}
+		log.Warn("media server not answering yet", "upstream", upstream, "err", err, "retryIn", wait)
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(wait):
+		}
+		wait = min(2*wait, 30*time.Second)
+	}
 }
 
 func env(name, fallback string) string {

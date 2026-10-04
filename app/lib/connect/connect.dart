@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../player/player.dart';
 import '../segue/client.dart';
 import '../segue/protocol.dart';
-import '../subsonic/models.dart';
+import '../server/models.dart';
 
 /// What plays, wherever it plays: what the now-playing bar shows, and which song the lists mark.
 class NowPlaying {
@@ -26,7 +26,7 @@ class NowPlaying {
     this.canJump = false,
   });
 
-  /// Its Subsonic id (the hub gives the app other devices' songs in its own API), or null when the
+  /// Its id in the app's API (the hub gives the app other devices' songs in it), or null when the
   /// hub couldn't translate it.
   final String? songId;
 

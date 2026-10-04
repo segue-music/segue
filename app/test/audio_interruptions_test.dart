@@ -4,8 +4,8 @@ import 'package:audio_session/audio_session.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:segue/player/audio_interruptions.dart';
 import 'package:segue/player/player.dart';
+import 'package:segue/server/models.dart';
 import 'package:segue/subsonic/api.dart';
-import 'package:segue/subsonic/models.dart';
 
 import 'fakes.dart';
 

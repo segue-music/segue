@@ -39,7 +39,7 @@ first client, an app of its own (`app/`); both have run next to a real Navidrome
 |---|---|
 | `SPEC.md` | The protocol |
 | `hub/` | The reference hub, in Go. Package `hub` (usable as a library), binary in `cmd/segue-hub` |
-| `app/` | A Spotify-like player for Navidrome built on Segue, in Flutter (Linux, Windows, macOS, Android, iOS). See [app/README.md](app/README.md) |
+| `app/` | A Spotify-like player for Navidrome, other OpenSubsonic servers and Jellyfin, built on Segue, in Flutter (Linux, Windows, macOS, Android, iOS). See [app/README.md](app/README.md) |
 
 The hub is in Go, the language of Navidrome, so that it can move into a media server. It also
 uses the same WebSocket library as Navidrome (`gorilla/websocket`). As a separate service it is
@@ -63,7 +63,7 @@ SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
 | Variable | Default | |
 |---|---|---|
 | `SEGUE_UPSTREAM` | (required) | The media server's URL, as the hub reaches it |
-| `SEGUE_UPSTREAM_KIND` | `navidrome` | `navidrome` (Subsonic API, Jellyfin API at `/jellyfin`, ids translated), `subsonic` or `jellyfin` |
+| `SEGUE_UPSTREAM_KIND` | (asked of the server) | `navidrome` (Subsonic API, Jellyfin API at `/jellyfin`, ids translated), `subsonic` or `jellyfin`. Left out, the hub asks `SEGUE_UPSTREAM` at startup, until it answers |
 | `SEGUE_LISTEN` | `127.0.0.1:8480` | Address and port |
 | `SEGUE_STATE` | | A file where each user's last playback is kept across restarts (SPEC, section 7). Empty keeps it in memory only |
 | `SEGUE_AUTH` | | `none` accepts any device, as the Subsonic user it claims (`dev` for other schemes). Only for trying things out |
@@ -86,8 +86,9 @@ listens on `0.0.0.0:8480`.
 2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`, leaving out what
    the hub reports itself), as devices that can be seen but not commanded. That covers apps like
    Symfonium, which is closed source.
-3. Check, once an app on the Jellyfin API speaks the protocol, that Navidrome's two APIs give the
-   same user names and that the ids translate on real items.
+3. Try the app on a real Jellyfin server and on Navidrome's Jellyfin API: that Navidrome's two APIs
+   give the same user names, and that the ids translate on real items. The app doesn't tell
+   Jellyfin what it plays yet (SPEC, section 12: Jellyfin apps report their own sessions).
 4. Propose it: an OpenSubsonic discussion (next to
    [#277](https://github.com/opensubsonic/open-subsonic-api/discussions/277)), Navidrome, and the
    open-source apps.

@@ -69,6 +69,7 @@ class _SegueAppState extends State<SegueApp> {
     });
     widget.mediaControls?.attach(null, null);
     widget.interruptions?.attach(null);
+    await services?.api.signOut();
     await services?.dispose();
     await Session.clear();
   }

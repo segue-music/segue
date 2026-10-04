@@ -33,6 +33,9 @@ class Auth {
     : scheme = 'subsonic',
       apiKey = null;
 
+  /// A Jellyfin access token, which the hub checks with /Users/Me.
+  const Auth.jellyfin({required String this.token}) : scheme = 'jellyfin', username = null, salt = null, apiKey = null;
+
   final String scheme;
   final String? username;
   final String? token;

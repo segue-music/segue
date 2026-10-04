@@ -2,13 +2,17 @@
 
 # Segue app
 
-A Spotify-like music player for Navidrome (or any OpenSubsonic server), built around Segue
-Connect: you pick a device, and whatever you play goes there. One Flutter codebase for Linux,
+A Spotify-like music player for Navidrome, any other OpenSubsonic server, or Jellyfin, built
+around Segue Connect: you pick a device, and whatever you play goes there. One Flutter codebase for Linux,
 Windows, macOS, Android and iOS. The interface is in Portuguese for now.
 
 **Status: skeleton.** It does:
-- signing in with the media server's own account, with the password kept as a Subsonic token in
-  the system's secure storage;
+- signing in with the media server's own account, with only its address: the app finds out whether
+  it speaks Subsonic (Navidrome, other OpenSubsonic servers) or Jellyfin (a Jellyfin server, or
+  Navidrome's Jellyfin API at `/jellyfin`, experimental since Navidrome 0.64 and turned on with
+  `ND_JELLYFIN_ENABLED=true`). The password isn't kept: the system's secure storage gets a Subsonic
+  token, or Jellyfin's access token, which signing out ends on a Jellyfin server (Navidrome's keeps
+  it until the password changes);
 - albums (newest first) and artists (by name, each with their albums), in a side rail or, on a
   phone, a bar at the bottom; the album page; search (artists, albums and songs); and playback
   through media_kit (libmpv), with a seek bar, shuffle and repeat (the queue or the track), in the
@@ -36,7 +40,9 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   menu, and the iOS icon.
 
 Not yet: playlists, editing the queue (play next, add to it, reorder it), the media controls on the other platforms (Android's
-media session), an offline cache, settings, and CarPlay as an app of its own (browsing the library
+media session), telling a Jellyfin server what plays (its sessions and play counts; on Subsonic
+servers the hub does it), on a Jellyfin server the cover of a song that came from another device
+when its file has none of its own (Jellyfin doesn't fall back to the album's), an offline cache, settings, and CarPlay as an app of its own (browsing the library
 on the car's screen, which needs Apple's CarPlay entitlement and native code). The Android build
 has been tried on a tablet and on an Android TV; the iOS build has not been tried on a device yet.
 
@@ -44,7 +50,9 @@ has been tried on a tablet and on an Android TV; the iOS build has not been trie
 
 | Folder | What |
 |---|---|
+| `lib/server/` | `MediaServer`, what the app asks of the media server in either API, and its albums, artists and songs; finding out which API a server speaks, and signing in to it |
 | `lib/subsonic/` | The Subsonic API: token sign-in, albums, artists, songs, search, stream and cover URLs |
+| `lib/jellyfin/` | The Jellyfin API: sign-in by name for this device, the same library calls, and signing out |
 | `lib/segue/` | The Segue protocol in Dart, the hub client (reconnects by itself) and hub discovery |
 | `lib/player/` | `PlayerController` (queue, commands, state reports) over an `AudioEngine`; `MediaKitEngine` is the real one. `MediaControls`: the system's media controls. `AudioInterruptions`: calls and the like pausing the music, on iOS |
 | `lib/connect/` | `ConnectController`: which device the app controls, and moving the music between devices |
@@ -86,7 +94,7 @@ flutter pub get
 flutter run -d linux
 ```
 
-Sign in with the Navidrome address (`https://` is added if left out), user and password.
+Sign in with the media server's address (`https://` is added if left out), user and password.
 
 ### Connect
 

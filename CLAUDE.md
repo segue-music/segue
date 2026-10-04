@@ -35,8 +35,10 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/src -w /src -e HOME=/tmp -e CG
 ```
 
 Configuration is all environment variables (`SEGUE_UPSTREAM`, `SEGUE_UPSTREAM_KIND`,
-`SEGUE_LISTEN`, `SEGUE_STATE`, `SEGUE_AUTH`); see the table in `README.md`. `SEGUE_AUTH=none`
-accepts any device as the user it claims, for tests and demos only.
+`SEGUE_LISTEN`, `SEGUE_STATE`, `SEGUE_AUTH`); see the table in `README.md`. Without
+`SEGUE_UPSTREAM_KIND`, the hub asks `SEGUE_UPSTREAM` what it is at startup (`DetectUpstream`), and
+waits for it to answer. `SEGUE_AUTH=none` accepts any device as the user it claims, for tests and
+demos only.
 
 ### App (Flutter 3.47)
 
@@ -95,6 +97,9 @@ Running two app instances on one machine as different devices:
   server who the credentials belong to and caches successes; `DevAuthenticator` for
   `SEGUE_AUTH=none`), `IDTranslator` (`NavidromeIDs` converts between Subsonic base62 ids and
   Jellyfin GUIDs, mirroring Navidrome's own code), and an injectable clock (`Now`) used by the tests.
+- `DetectUpstream` (`auth.go`) tells the kind of media server from a Subsonic ping without
+  credentials (OpenSubsonic's `type` says Navidrome) or Jellyfin's `System/Info/Public`.
+  `ErrNotAMediaServer` is a wrong URL; other errors are a server not answering yet.
 - Messages are built per recipient (`broadcast`, `view`), because each device receives queue ids in
   its own API (`subsonic` or `jellyfin`).
 - `last.go` holds each user's "last playback" (SPEC section 7). It is the only state that can reach
@@ -110,7 +115,7 @@ Running two app instances on one machine as different devices:
 
 ## App architecture
 
-- `services.dart`: `Services.start` wires one signed-in session: `SubsonicApi` →
+- `services.dart`: `Services.start` wires one signed-in session: `MediaServer` →
   `PlayerController` → `ConnectController`, plus a `SegueClient` if a hub was discovered (otherwise
   the app only plays locally). `ServicesScope` hands this down the tree. It sits in
   `MaterialApp.builder` (`app.dart`), above the navigator, so pages, sheets and the keyboard
@@ -129,6 +134,12 @@ Running two app instances on one machine as different devices:
   call `connect`, not `player`, for playback. It also follows whichever device starts playing, and
   restores the last playback on first connect. It links the player and the hub:
   `player.onReport → client.sendState` and `client.onCommand → player.obey`.
+- `MediaServer` (`lib/server/server.dart`) is what pages, the player and the media controls ask of
+  the media server, in either API: `SubsonicApi` (`lib/subsonic/`) or `JellyfinApi`
+  (`lib/jellyfin/`). The user types only the address: `signIn` (`lib/server/sign_in.dart`) asks it
+  which API it speaks (`detectApi`: a Subsonic ping, else Jellyfin's `System/Info/Public`), and
+  `openServer` reopens a saved sign-in by its credentials. The API also gives the hub's hello its
+  `api` and `auth`, so a Jellyfin sign-in is a Jellyfin device, with ids in Jellyfin's API.
 - `lib/segue/`: protocol types, the client (reconnects with backoff; stops on final close codes
   4001/4002/4003) and hub discovery (`/connect/v1/info` next to the server).
 - `MediaControls` (`lib/player/media_controls.dart`) mirrors `connect.nowPlaying` to the system's
@@ -136,8 +147,9 @@ Running two app instances on one machine as different devices:
 - `AudioInterruptions` (`lib/player/audio_interruptions.dart`), on iOS only, sets the audio session
   up for music and pauses the local player for calls (resuming after, when iOS says to) and when the
   car or headphones go away. libmpv knows of neither.
-- `Session` keeps the Subsonic token and salt in secure storage and everything else in
-  `shared_preferences`. The password itself is never stored.
+- `Session` keeps the token (Subsonic's, with its salt, or Jellyfin's access token) in secure
+  storage and everything else in `shared_preferences`, with the API under `api` (none: a session
+  saved before Jellyfin, so Subsonic). The password itself is never stored.
 - Android TV: the remote drives the app through focus. `segueTheme` (`lib/ui/theme.dart`) gives
   focused buttons a ring and everything else a strong tint, and `FocusRing` draws a ring on tiles
   whose image hides the tint. `FocusRing` must keep the same widget tree with or without focus,

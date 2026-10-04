@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import '../segue/client.dart';
 import '../segue/protocol.dart';
-import '../subsonic/api.dart';
-import '../subsonic/models.dart';
+import '../server/models.dart';
+import '../server/server.dart';
 import 'engine.dart';
 
 /// This device's player: the queue, playback, and the commands other devices send it.
@@ -15,7 +15,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   final AudioEngine _engine;
-  final SubsonicApi _api;
+  final MediaServer _api;
   late final StreamSubscription<void> _subscription;
   // The songs as playQueue got them, and _queue: them in the engine's play order (shuffled, or not).
   List<Song> _opened = const [];
@@ -129,8 +129,8 @@ class PlayerController extends ChangeNotifier {
       case CommandAction.setShuffle:
         await setShuffle(command.shuffle!);
       case CommandAction.setQueue:
-        // Items the hub couldn't express as Subsonic ids can't be played here: skip them, keeping
-        // the current track current.
+        // Items the hub couldn't express in this device's API can't be played here: skip them,
+        // keeping the current track current.
         final items = command.queue!;
         final playable = [
           for (final item in items)

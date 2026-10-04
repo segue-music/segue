@@ -7,14 +7,14 @@ import 'package:path_provider/path_provider.dart';
 
 import '../connect/connect.dart';
 import '../segue/protocol.dart';
-import '../subsonic/api.dart';
+import '../server/server.dart';
 
 /// The system's media controls (MPRIS on Linux: media keys, the desktop's player widget, KDE
 /// Connect...; Now Playing on iOS: the lock screen, Control Center, CarPlay, headphone buttons) for
 /// what the now-playing bar shows: this device's playback, or the device it follows.
 class MediaControls extends BaseAudioHandler with SeekHandler {
   ConnectController? _connect;
-  SubsonicApi? _api;
+  MediaServer? _api;
   Timer? _tick;
 
   /// Starts the system's media service, on the platforms where the app sets it up: Linux (MPRIS)
@@ -37,7 +37,7 @@ class MediaControls extends BaseAudioHandler with SeekHandler {
   }
 
   /// Shows [connect]'s playback; null (signed out) shows nothing. [api] fetches the covers.
-  void attach(ConnectController? connect, SubsonicApi? api) {
+  void attach(ConnectController? connect, MediaServer? api) {
     _connect?.removeListener(_sync);
     _connect = connect;
     _api = api;

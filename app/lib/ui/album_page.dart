@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../server/models.dart';
 import '../services.dart';
-import '../subsonic/models.dart';
 import 'cover.dart';
 import 'current_song.dart';
 import 'errors.dart';

@@ -6,12 +6,15 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:segue/connect/connect.dart';
+import 'package:segue/jellyfin/api.dart';
 import 'package:segue/player/media_controls.dart';
 import 'package:segue/player/player.dart';
 import 'package:segue/segue/client.dart';
 import 'package:segue/segue/protocol.dart';
+import 'package:segue/server/models.dart';
+import 'package:segue/services.dart';
+import 'package:segue/session.dart';
 import 'package:segue/subsonic/api.dart';
-import 'package:segue/subsonic/models.dart';
 
 import 'fakes.dart';
 
@@ -380,5 +383,33 @@ void main() {
     await laptop.client.close();
     await until(() => phone.client.devices['laptop']?.online == false, 'the laptop to go offline');
     expect(phone.connect.devices, isEmpty);
+  });
+
+  test('a Jellyfin sign-in joins as a Jellyfin device, and gets queues in Jellyfin ids', () async {
+    // With SEGUE_AUTH=none the hub takes every Jellyfin device as the user "dev", and it translates
+    // between Navidrome's two kinds of ids.
+    final laptop = await App('dev', 'laptop').start();
+    final engine = FakeEngine();
+    final tv = await Services.start(
+      Session(
+        server: Uri.parse('https://music.test/jellyfin'),
+        credentials: const JellyfinCredentials(username: 'dev', userId: 'u1', token: 't1'),
+        deviceId: 'tv',
+        deviceName: 'tv',
+        hub: hubUrl.replace(scheme: 'http', path: ''),
+      ),
+      engine: engine,
+    );
+    addTearDown(tv.dispose);
+    await until(() => laptop.connect.devices.any((d) => d.id == 'tv'), 'the tv');
+    expect(laptop.client.devices['tv']!.info.api, Api.jellyfin);
+    expect((await laptop.connect.switchTo('tv')).ok, isTrue);
+    expect((await laptop.connect.playSongs(songs, 0)).ok, isTrue);
+    const guids = ['c032d12530e3c18d843d13651f9689ac', 'ffffffffffffffffffffffffffffffff'];
+    expect(tv.player.queue.map((song) => song.id), guids);
+    expect(engine.tracks.first.path, '/jellyfin/Audio/${guids.first}/stream');
+    // What the tv reports reaches the laptop in Subsonic ids.
+    await until(() => laptop.connect.queue.tracks.length == 2, 'the tv\'s queue on the laptop');
+    expect(laptop.connect.queue.tracks.map((track) => track.id), songs.map((song) => song.id));
   });
 }
