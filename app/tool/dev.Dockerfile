@@ -1,6 +1,9 @@
 # Flutter for building and testing the app's Linux version without a desktop: tool/flutter.sh runs
 # it. No Android SDK yet.
 FROM debian:trixie-slim
+# The nightly image cleanup on the server (~/selfhosted, scripts/auto-update.sh) deletes every image
+# with no container that no compose file there mentions; this label keeps this one.
+LABEL selfhosted.keep=true
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git unzip xz-utils zip \
       clang cmake make ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-14-dev \
