@@ -54,13 +54,12 @@ class _DevicesSheet extends StatelessWidget {
             ),
           for (final device in connect.devices)
             ListTile(
-              enabled: device.online || (device.state?.queue?.isNotEmpty ?? false),
-              leading: Icon(device.online ? Icons.speaker : Icons.speaker_outlined),
+              leading: const Icon(Icons.speaker),
               title: Text(device.info.name),
               subtitle: Text(_describe(device)),
               selected: connect.activeId == device.id,
               trailing: _marks(playing: connect.playingId == device.id, active: connect.activeId == device.id),
-              onTap: () => act(() => device.online ? connect.switchTo(device.id) : connect.continueFrom(device.id)),
+              onTap: () => act(() => connect.switchTo(device.id)),
             ),
         ],
       ),
@@ -79,7 +78,6 @@ class _DevicesSheet extends StatelessWidget {
   static String _describe(Device device) {
     final item = device.state?.current;
     final what = item == null ? null : [item.title, item.artist].nonNulls.join(' · ');
-    if (!device.online) return what == null ? 'Offline' : 'Offline · toque para continuar daqui: $what';
     return switch (device.state?.status) {
       PlaybackStatus.playing => 'Tocando: $what',
       PlaybackStatus.paused => 'Pausado: $what',

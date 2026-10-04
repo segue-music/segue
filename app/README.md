@@ -10,9 +10,9 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
 - an album grid (newest first), the album page, search (albums and songs, by name, title or
   artist), and playback through media_kit (libmpv);
 - Connect: the hub is found next to the server (or typed in), and the device picker lists the
-  user's other devices with what they play. Picking one makes the app control it (play, pause,
-  skip, play an album there). Picking this device again moves the music here, at the same point.
-  The queue of a device that went offline can be picked up here.
+  user's other devices that are online, with what they play. Picking one makes the app control it
+  (play, pause, skip, play an album there). Picking this device again moves the music here, at the
+  same point. An app opened when nothing plays anywhere picks up where the music was.
 
 - the system's media controls on Linux (MPRIS, through `audio_service`): media keys, the
   desktop's player widget and KDE Connect show and command what the now-playing bar shows, the

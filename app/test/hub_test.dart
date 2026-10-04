@@ -269,15 +269,13 @@ void main() {
     expect(phone.player.queue, isEmpty);
   });
 
-  test('continues here what a closed app was playing', () async {
+  test('a closed app leaves the list of devices to play on', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();
     final phone = await App(user, 'phone').start();
-    await laptop.player.playQueue(songs);
-    await until(() => phone.client.devices['laptop']?.state?.current != null, 'the laptop queue');
+    await until(() => phone.connect.devices.any((d) => d.id == 'laptop'), 'the laptop');
     await laptop.client.close();
     await until(() => phone.client.devices['laptop']?.online == false, 'the laptop to go offline');
-    expect((await phone.connect.continueFrom('laptop')).ok, isTrue);
-    expect(phone.player.current?.title, 'Dream On');
+    expect(phone.connect.devices, isEmpty);
   });
 }

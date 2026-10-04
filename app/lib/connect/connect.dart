@@ -65,10 +65,11 @@ class ConnectController extends ChangeNotifier {
 
   Device? get activeDevice => _active == null ? null : client?.devices[_active];
 
-  /// The user's other players: online first, then by name.
+  /// The user's other players that are online, by name. Offline ones can't play, so they are left
+  /// out, though the hub still lists them.
   List<Device> get devices {
-    final list = [...?client?.devices.values.where((d) => d.info.isPlayer)];
-    list.sort((a, b) => a.online != b.online ? (a.online ? -1 : 1) : a.info.name.compareTo(b.info.name));
+    final list = [...?client?.devices.values.where((d) => d.info.isPlayer && d.online)];
+    list.sort((a, b) => a.info.name.compareTo(b.info.name));
     return list;
   }
 
@@ -130,16 +131,6 @@ class ConnectController extends ChangeNotifier {
     _active = deviceId;
     notifyListeners();
     return const Result(ok: true);
-  }
-
-  /// Picks up here what a device that went offline was playing.
-  Future<Result> continueFrom(String deviceId) async {
-    final result = await client!.transfer(deviceId, client!.device.id);
-    if (result.ok) {
-      _active = null;
-      notifyListeners();
-    }
-    return result;
   }
 
   Future<Result> _run(Command command, Future<void> Function() here) async {
