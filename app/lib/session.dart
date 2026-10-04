@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'device.dart';
 import 'subsonic/api.dart';
 
 /// Who is signed in, where, and as which device. The token and salt are as good as the password
@@ -88,14 +89,9 @@ class Session {
     return id;
   }
 
+  /// The name other devices see: the one the system gives this device (not the system's own).
   static Future<String> thisDeviceName() async =>
-      Platform.environment['SEGUE_DEVICE_NAME'] ?? await _prefs.getString('deviceName') ?? defaultDeviceName();
-
-  static String defaultDeviceName() {
-    if (Platform.isAndroid) return 'Android';
-    if (Platform.isIOS) return 'iPhone';
-    return Platform.localHostname;
-  }
+      Platform.environment['SEGUE_DEVICE_NAME'] ?? await _prefs.getString('deviceName') ?? await systemDeviceName();
 }
 
 /// What the user typed as the server, as a URL: https unless they said otherwise.

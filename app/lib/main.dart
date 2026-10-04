@@ -4,7 +4,7 @@ import 'package:media_kit/media_kit.dart';
 import 'app.dart';
 import 'player/media_controls.dart';
 import 'session.dart';
-import 'television.dart';
+import 'device.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
