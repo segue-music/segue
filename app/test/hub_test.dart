@@ -267,14 +267,19 @@ void main() {
     expect(phone.player.repeat, Repeat.off, reason: 'not the phone\'s own player');
   });
 
-  test('starting to play on one device pauses the others', () async {
+  test('starting to play on one device stops the others: no other is left paused with the music', () async {
     final user = newUser();
     final laptop = await App(user, 'laptop').start();
     final phone = await App(user, 'phone').start();
     await laptop.player.playQueue(songs);
     await until(() => phone.connect.playingId == 'laptop', 'the phone to see the laptop playing');
     await phone.player.playQueue(songs, index: 1);
-    await until(() => !laptop.player.playing, 'the laptop to pause');
+    await until(() => laptop.player.queue.isEmpty, 'the laptop to stop');
+    expect(laptop.player.status, PlaybackStatus.stopped);
+    await until(
+      () => phone.client.devices['laptop']?.state?.status == PlaybackStatus.stopped,
+      'the phone to see the laptop stopped, not paused',
+    );
     expect(phone.player.playing, isTrue);
     await until(() => laptop.connect.nowPlaying?.device == 'phone', 'the laptop to follow the phone');
   });
@@ -322,13 +327,19 @@ void main() {
     expect(laptop.player.playing, isTrue);
     expect((await phone.connect.next()).error, 'no such track', reason: "the laptop's own error comes back");
 
-    // Pick this phone again: the music moves here, at the laptop's position, and the laptop pauses.
+    // Pick this phone again: the music moves here, at the laptop's position, and the laptop stops:
+    // idle, not paused with music that now plays here.
     expect((await phone.connect.switchTo(null)).ok, isTrue);
     expect(phone.player.queue.map((song) => song.id), songs.map((song) => song.id));
     expect(phone.player.index, 1);
     expect(phone.player.playing, isTrue);
     expect(phone.player.position.inMilliseconds, greaterThanOrEqualTo(30000));
-    expect(laptop.player.playing, isFalse);
+    expect(laptop.player.queue, isEmpty);
+    expect(laptop.player.status, PlaybackStatus.stopped);
+    await until(
+      () => phone.client.devices['laptop']?.state?.status == PlaybackStatus.stopped,
+      'the phone to see the laptop stopped, not paused',
+    );
     expect(phone.connect.nowPlaying?.device, isNull);
   });
 

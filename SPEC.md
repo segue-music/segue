@@ -193,8 +193,9 @@ where `hubNow` is the local time plus the offset measured at `welcome` (`serverT
 time). Nobody depends on device clocks being right.
 
 **One device plays at a time**, as with Spotify: when a player's report goes from not playing to
-`playing`, the hub sends `pause` to the user's other players that are playing, as a command from
-the device that started. Reports from a device that already plays (a new track, say) don't do it
+`playing`, the hub sends `stop` to the user's other players that are playing (`pause` to one that
+takes no `stop`), as a command from the device that started. The music has moved, and they are left
+idle, not paused with it. Reports from a device that already plays (a new track, say) don't do it
 again. Every app then sees, and follows, the one device that plays.
 
 ## 5. Commands
@@ -237,7 +238,8 @@ The hub:
 1. takes the source's last state and works out its position now;
 2. sends the destination a `setQueue` with that queue, index and position (ids translated,
    [section 8](#8-ids-across-apis));
-3. if that worked and the source is online and playing, sends the source a `pause` (best effort:
+3. if that worked and the source is online, sends it a `stop` (a `pause`, if it plays and takes no
+   `stop`), so that it is left idle, not paused with music that now plays elsewhere (best effort:
    the music has already moved);
 4. answers the request with the destination's result, or `nothingToTransfer` when the source has
    no queue.

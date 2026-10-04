@@ -408,8 +408,9 @@ func TestTransfer(t *testing.T) {
 	if got.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" || got.Queue[1].ID != "7N42dgm5tFLK9N8MT7fHC7" {
 		t.Fatalf("queue %+v", got.Queue)
 	}
-	if paused := phone.obey(""); paused.Action != ActPause {
-		t.Fatalf("the phone got %+v", paused)
+	// The music has left the phone: it stops, rather than stay paused with a queue no one plays.
+	if stopped := phone.obey(""); stopped.Action != ActStop {
+		t.Fatalf("the phone got %+v", stopped)
 	}
 	if r := pc.expect("result"); r.Re != "t1" || !r.OK {
 		t.Fatalf("result %+v", r)
@@ -418,6 +419,33 @@ func TestTransfer(t *testing.T) {
 	pc.send(map[string]any{"type": "transfer", "id": "t2", "from": "pc", "to": "tv"})
 	if r := pc.expect("result"); r.Error != "nothingToTransfer" {
 		t.Fatalf("result %+v", r)
+	}
+}
+
+func TestTransferLeavesThePausedSourceIdleToo(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	phone.report(map[string]any{"status": "paused", "positionMs": 5000, "queue": songs})
+	tv.expect("state")
+	phone.send(map[string]any{"type": "transfer", "id": "t", "from": "phone", "to": "tv", "play": true})
+	tv.obey("")
+	if stopped := phone.obey(""); stopped.Action != ActStop {
+		t.Fatalf("the phone got %+v", stopped)
+	}
+	phone.expect("result")
+}
+
+func TestADeviceWithoutStopIsPausedInstead(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	old := []Action{ActPlay, ActPause, ActSetQueue}
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, old...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	tv.expect("state")
+	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	if msg := phone.expect("command"); msg.Command.Action != ActPause {
+		t.Fatalf("one device at a time: the phone got %+v", msg.Command)
 	}
 }
 
@@ -667,7 +695,7 @@ func TestLastPlaybackFollowsWhoPlays(t *testing.T) {
 	}
 }
 
-func TestStartingToPlayPausesTheOthers(t *testing.T) {
+func TestStartingToPlayStopsTheOthers(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
@@ -696,10 +724,10 @@ func TestStartingToPlayPausesTheOthers(t *testing.T) {
 	stateFrom(tv, "phone")
 	stateFrom(tv, "speaker")
 
-	// The TV starts playing: the phone, which plays, is paused; the paused speaker is left alone.
+	// The TV starts playing: the phone, which plays, stops; the paused speaker is left alone.
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
 	msg := phone.expect("command")
-	if msg.Command.Action != ActPause || msg.From != "tv" {
+	if msg.Command.Action != ActStop || msg.From != "tv" {
 		t.Fatalf("the phone got %+v from %q", msg.Command, msg.From)
 	}
 	phone.send(map[string]any{"type": "result", "re": msg.ID, "ok": true})

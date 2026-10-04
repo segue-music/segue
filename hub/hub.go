@@ -290,7 +290,7 @@ func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
 	e.state.At, e.lastSeen = now.UnixMilli(), now
 	h.noteLastPlayback(e)
 	if started {
-		h.pauseOthers(e)
+		h.stopOthers(e)
 	}
 	// Recipients merge the report into what they have, so relay only what the player sent.
 	relayed := StampedState{PlayerState: report, At: now.UnixMilli()}
@@ -299,17 +299,32 @@ func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
 	})
 }
 
-// pauseOthers keeps one device playing at a time (SPEC.md, section 4): the user's other players
-// that are playing get a pause, sent as from the device that started. Call with h.mu held; the
+// stopOthers keeps one device playing at a time (SPEC.md, section 4): the user's other players
+// that are playing are left (see leave), as by the device that started. Call with h.mu held; the
 // commands go out once it is released.
-func (h *Hub) pauseOthers(e *entry) {
+func (h *Hub) stopOthers(e *entry) {
 	for _, other := range h.users[e.user] {
 		if other == e || other.conn == nil || other.state == nil || other.state.Status != Playing {
 			continue
 		}
-		h.log.Info("one device at a time: pausing", "user", e.user, "device", other.info.Name, "for", e.info.Name)
-		go h.request(other, Command{Action: ActPause}, other.info.API, e.info.ID)
+		if command, ok := leave(other); ok {
+			h.log.Info("one device at a time: stopping", "user", e.user, "device", other.info.Name, "for", e.info.Name)
+			go h.request(other, command, other.info.API, e.info.ID)
+		}
 	}
+}
+
+// leave is what a player the music has left gets (SPEC.md, sections 4 and 6): a stop, so that it
+// is idle rather than paused with a queue no one plays; a pause, if it plays but takes no stop. ok
+// is false when there is nothing to send. Call with h.mu held.
+func leave(e *entry) (command Command, ok bool) {
+	switch {
+	case e.info.obeys(ActStop):
+		return Command{Action: ActStop}, true
+	case e.state != nil && e.state.Status == Playing && e.info.obeys(ActPause):
+		return Command{Action: ActPause}, true
+	}
+	return Command{}, false
 }
 
 func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
@@ -376,13 +391,17 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	}
 
 	o := h.request(destination, handoff, sourceAPI, from)
-	if o.ok {
+	if o.ok && source != destination {
 		h.mu.Lock()
-		playing := source.conn != nil && source.state.Status == Playing
+		var command Command
+		ok := false
+		if source.conn != nil && source.state != nil && len(source.state.Queue) > 0 {
+			command, ok = leave(source)
+		}
 		h.mu.Unlock()
-		if playing {
-			// Best effort: the music has already moved, so a source that won't pause doesn't undo it.
-			h.request(source, Command{Action: ActPause}, sourceAPI, from)
+		if ok {
+			// Best effort: the music has already moved, so a source that won't stop doesn't undo it.
+			h.request(source, command, sourceAPI, from)
 		}
 	}
 	reply(o)
