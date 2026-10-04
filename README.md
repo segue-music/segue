@@ -59,8 +59,8 @@ listens on `0.0.0.0:8480`.
 
 ## Next steps
 
-1. The app: playlists, the queue on screen, and trying the Android build on a phone and a TV, and the
-   iOS build on an iPhone and in a car (see [app/README.md](app/README.md)).
+1. The app: playlists, the queue on screen, and trying the iOS build on an iPhone and in a car (see
+   [app/README.md](app/README.md)).
 2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`), as devices that
    can be seen but not commanded. That covers apps like Symfonium, which is closed source.
 3. Check, once an app on the Jellyfin API speaks the protocol, that Navidrome's two APIs give the

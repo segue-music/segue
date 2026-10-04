@@ -35,7 +35,7 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
 Not yet: playlists, the queue on screen, the media controls on the other platforms (Android's
 media session), an offline cache, settings, and CarPlay as an app of its own (browsing the library
 on the car's screen, which needs Apple's CarPlay entitlement and native code). The Android build
-(phones and Android TV) and the iOS build have not been tried on a device yet.
+has been tried on a tablet and on an Android TV; the iOS build has not been tried on a device yet.
 
 ## Code
 
@@ -126,6 +126,21 @@ adb install -r segue-android.apk
 Newer Google TVs offer wireless debugging instead: `adb pair` with the address and code the TV
 shows, then `adb connect`. The TV has to reach the media server (and the hub) at the address used
 to sign in.
+
+Phones and tablets work the same way, through wireless debugging (Settings > About: press "Build
+number" seven times, then Developer options > Wireless debugging). Its main screen shows the address
+and port for `adb connect`; "Pair device with pairing code" shows another port, and the code, for
+`adb pair`, which is needed once per computer:
+
+```sh
+adb pair <address>:<pairing port> <code>
+adb connect <address>:<port>
+adb install -r segue-android.apk
+```
+
+The port changes each time wireless debugging is turned on, and the address can change too when
+the device rejoins the network. Over a slow Wi-Fi link the APK can take a while: copying it to the
+device and opening it there (allowing that app to install apps) does the same.
 
 ## Running on iOS
 
