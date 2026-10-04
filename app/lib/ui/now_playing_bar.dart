@@ -25,6 +25,12 @@ class NowPlayingBar extends StatefulWidget {
 class _NowPlayingBarState extends State<NowPlayingBar> {
   late final Timer _tick;
 
+  /// Where the slider is held, in place of the position: while dragging, and after letting go
+  /// until the position gets there (from another device, that comes with its next report).
+  Duration? _held;
+  bool _dragging = false;
+  Timer? _letGo;
+
   @override
   void initState() {
     super.initState();
@@ -37,6 +43,7 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
   @override
   void dispose() {
     _tick.cancel();
+    _letGo?.cancel();
     super.dispose();
   }
 
@@ -45,6 +52,18 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
     if (!result.ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(result.error))));
     }
+  }
+
+  void _seekTo(Duration target) {
+    setState(() {
+      _dragging = false;
+      _held = target;
+    });
+    _letGo?.cancel();
+    _letGo = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _held = null);
+    });
+    unawaited(_do(() => ServicesScope.of(context).connect.seek(target)));
   }
 
   @override
@@ -57,9 +76,12 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
         final now = connect.nowPlaying;
         if (now == null) return const SizedBox.shrink();
         final duration = now.duration;
-        final progress = duration == null || duration == Duration.zero
-            ? 0.0
-            : (now.position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+        final held = _held;
+        if (held != null && !_dragging && (now.position - held).abs() < const Duration(seconds: 1)) {
+          _held = null; // the position got there
+        }
+        final position = _held ?? now.position;
+        final length = duration?.inMilliseconds ?? 0;
         return Material(
           color: colors.surfaceContainer,
           child: SafeArea(
@@ -67,7 +89,22 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                LinearProgressIndicator(value: progress, minHeight: 2),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                  ),
+                  child: Slider(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
+                    max: length > 0 ? length.toDouble() : 1,
+                    value: length > 0 ? position.inMilliseconds.clamp(0, length).toDouble() : 0,
+                    semanticFormatterCallback: (ms) => formatDuration(Duration(milliseconds: ms.round())),
+                    onChangeStart: length > 0 ? (_) => _dragging = true : null,
+                    onChanged: length > 0 ? (ms) => setState(() => _held = Duration(milliseconds: ms.round())) : null,
+                    onChangeEnd: length > 0 ? (ms) => _seekTo(Duration(milliseconds: ms.round())) : null,
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   child: Row(
@@ -86,7 +123,8 @@ class _NowPlayingBarState extends State<NowPlayingBar> {
                           ],
                         ),
                       ),
-                      Text(formatDuration(now.position), style: Theme.of(context).textTheme.bodySmall),
+                      const SizedBox(width: 8),
+                      Text(formatDuration(position), style: Theme.of(context).textTheme.bodySmall),
                       IconButton(
                         tooltip: 'Anterior',
                         icon: const Icon(Icons.skip_previous),
