@@ -6,8 +6,8 @@ import '../segue/client.dart';
 import '../segue/protocol.dart';
 import '../services.dart';
 import '../subsonic/models.dart';
-import 'album_page.dart';
-import 'cover.dart';
+import 'albums_view.dart';
+import 'artists_view.dart';
 import 'devices_sheet.dart';
 import 'now_playing_bar.dart';
 import 'search_results.dart';
@@ -25,19 +25,38 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+/// The library's sections, in the side rail (or, on a phone, the bar at the bottom).
+enum _Section {
+  albums('Álbuns', Icons.album_outlined, Icons.album),
+  artists('Artistas', Icons.person_outline, Icons.person);
+
+  const _Section(this.label, this.icon, this.selectedIcon);
+
+  final String label;
+  final IconData icon;
+  final IconData selectedIcon;
+}
+
 class _HomePageState extends State<HomePage> {
-  Future<List<Album>>? _albums;
   final _search = TextEditingController();
   Timer? _typing;
   String _query = '';
 
-  /// What the search bar found; null shows the albums.
+  /// What the search bar found; null shows the section.
   Future<SearchResults>? _results;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _albums ??= ServicesScope.of(context).api.albums();
+  _Section _section = _Section.albums;
+
+  /// The sections opened so far: each loads the first time it is opened.
+  final _opened = {_Section.albums};
+
+  void _select(int index) {
+    final section = _Section.values[index];
+    setState(() {
+      _section = section;
+      _opened.add(section);
+    });
+    if (_results != null) _clearSearch();
   }
 
   void _typed(String text) {
@@ -91,13 +110,30 @@ class _HomePageState extends State<HomePage> {
     );
     // Next to the title when there is room for both; on a phone, on a line of its own under it.
     final narrow = MediaQuery.sizeOf(context).width < 600;
+    final sections = Stack(
+      fit: StackFit.expand,
+      children: [
+        // Each section stays underneath once opened, also while searching: going back to it, or
+        // clearing the search, finds it where it was.
+        for (final section in _opened)
+          Offstage(
+            key: ValueKey(section),
+            offstage: results != null || section != _section,
+            child: switch (section) {
+              _Section.albums => const AlbumsView(),
+              _Section.artists => const ArtistsView(),
+            },
+          ),
+        if (results != null) SearchResultsList(results),
+      ],
+    );
     return Scaffold(
       appBar: AppBar(
         title: narrow
-            ? const Text('Álbuns')
+            ? Text(_section.label)
             : Row(
                 children: [
-                  const Text('Álbuns'),
+                  Text(_section.label),
                   const SizedBox(width: 24),
                   Flexible(child: searchBar),
                 ],
@@ -114,70 +150,47 @@ class _HomePageState extends State<HomePage> {
           IconButton(tooltip: 'Sair', icon: const Icon(Icons.logout), onPressed: widget.onSignOut),
         ],
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Kept underneath while searching, so that clearing the search goes back to the same place.
-          Offstage(
-            offstage: results != null,
-            child: FutureBuilder(
-              future: _albums,
-              builder: (context, snapshot) {
-                if (snapshot.hasError) return Center(child: Text('Não consegui listar os álbuns: ${snapshot.error}'));
-                final albums = snapshot.data;
-                if (albums == null) return const Center(child: CircularProgressIndicator());
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    final reload = services.api.albums();
-                    setState(() => _albums = reload);
-                    await reload;
-                  },
-                  child: GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 180,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      childAspectRatio: 0.75,
-                    ),
-                    itemCount: albums.length,
-                    itemBuilder: (context, i) => _AlbumTile(albums[i]),
-                  ),
-                );
-              },
+      body: narrow
+          ? sections
+          : Row(
+              children: [
+                NavigationRail(
+                  selectedIndex: _section.index,
+                  onDestinationSelected: _select,
+                  labelType: NavigationRailLabelType.all,
+                  destinations: [
+                    for (final section in _Section.values)
+                      NavigationRailDestination(
+                        icon: Icon(section.icon),
+                        selectedIcon: Icon(section.selectedIcon),
+                        label: Text(section.label),
+                      ),
+                  ],
+                ),
+                const VerticalDivider(width: 1),
+                Expanded(child: sections),
+              ],
             ),
-          ),
-          if (results != null) SearchResultsList(results),
-        ],
-      ),
-      bottomNavigationBar: const NowPlayingBar(),
-    );
-  }
-}
-
-class _AlbumTile extends StatelessWidget {
-  const _AlbumTile(this.album);
-
-  final Album album;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AlbumPage(album))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Cover(album.coverArt)),
-          ),
-          const SizedBox(height: 6),
-          Text(album.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
-          Text(album.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodySmall),
-        ],
-      ),
+      bottomNavigationBar: narrow
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const NowPlayingBar(),
+                NavigationBar(
+                  selectedIndex: _section.index,
+                  onDestinationSelected: _select,
+                  destinations: [
+                    for (final section in _Section.values)
+                      NavigationDestination(
+                        icon: Icon(section.icon),
+                        selectedIcon: Icon(section.selectedIcon),
+                        label: section.label,
+                      ),
+                  ],
+                ),
+              ],
+            )
+          : const NowPlayingBar(),
     );
   }
 }

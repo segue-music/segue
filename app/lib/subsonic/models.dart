@@ -54,5 +54,21 @@ class Song {
       QueueItem(id: id, title: title, artist: artist, album: album, durationMs: duration?.inMilliseconds);
 }
 
+class Artist {
+  const Artist({required this.id, required this.name, this.coverArt, this.albumCount});
+
+  factory Artist.fromJson(Map<String, dynamic> json) => Artist(
+    id: json['id'] as String,
+    name: json['name'] as String? ?? '',
+    coverArt: json['coverArt'] as String?,
+    albumCount: (json['albumCount'] as num?)?.toInt(),
+  );
+
+  final String id;
+  final String name;
+  final String? coverArt;
+  final int? albumCount;
+}
+
 /// What a search found.
-typedef SearchResults = ({List<Album> albums, List<Song> songs});
+typedef SearchResults = ({List<Artist> artists, List<Album> albums, List<Song> songs});

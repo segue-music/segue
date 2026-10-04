@@ -81,7 +81,10 @@ void main() {
     expect(find.text('Toys in the Attic'), findsOneWidget);
     expect(find.byTooltip('Limpar'), findsNothing);
     // The bar has a line of its own, under the title.
-    expect(tester.getCenter(find.byType(TextField)).dy, greaterThan(tester.getBottomLeft(find.text('Álbuns')).dy));
+    expect(
+      tester.getCenter(find.byType(TextField)).dy,
+      greaterThan(tester.getBottomLeft(find.descendant(of: find.byType(AppBar), matching: find.text('Álbuns'))).dy),
+    );
 
     await tester.enterText(find.byType(TextField), 'dre');
     await tester.pump(const Duration(milliseconds: 100));
@@ -110,7 +113,7 @@ void main() {
 
   testWidgets('on a wide screen, the bar sits next to the title', (tester) async {
     await pumpHome(tester, const Size(1000, 640));
-    final title = tester.getRect(find.text('Álbuns'));
+    final title = tester.getRect(find.descendant(of: find.byType(AppBar), matching: find.text('Álbuns')));
     final field = tester.getRect(find.byType(TextField));
     expect(field.left, greaterThan(title.right));
     expect(field.center.dy, moreOrLessEquals(title.center.dy, epsilon: 4));

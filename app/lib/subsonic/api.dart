@@ -66,19 +66,40 @@ class SubsonicApi {
     return (Album.fromJson(json), [for (final song in songs) Song.fromJson(song as Map<String, dynamic>)]);
   }
 
-  /// Albums and songs whose name, title or artist matches [query] (search3).
-  Future<SearchResults> search(String query, {int albums = 10, int songs = 50}) async {
+  /// Artists, albums and songs whose name, title or artist matches [query] (search3).
+  Future<SearchResults> search(String query, {int artists = 5, int albums = 10, int songs = 50}) async {
     final body = await _get('search3', {
       'query': query,
-      'artistCount': '0',
+      'artistCount': '$artists',
       'albumCount': '$albums',
       'songCount': '$songs',
     });
     final result = body['searchResult3'] as Map<String, dynamic>? ?? const {};
     return (
+      artists: [
+        for (final artist in result['artist'] as List? ?? const []) Artist.fromJson(artist as Map<String, dynamic>),
+      ],
       albums: [for (final album in result['album'] as List? ?? const []) Album.fromJson(album as Map<String, dynamic>)],
       songs: [for (final song in result['song'] as List? ?? const []) Song.fromJson(song as Map<String, dynamic>)],
     );
+  }
+
+  /// Every artist, by name (getArtists, which groups them by letter).
+  Future<List<Artist>> artists() async {
+    final body = await _get('getArtists');
+    final index = (body['artists'] as Map<String, dynamic>?)?['index'] as List? ?? const [];
+    return [
+      for (final letter in index)
+        for (final artist in (letter as Map<String, dynamic>)['artist'] as List? ?? const [])
+          Artist.fromJson(artist as Map<String, dynamic>),
+    ];
+  }
+
+  /// An artist and their albums (getArtist).
+  Future<(Artist, List<Album>)> artist(String id) async {
+    final json = (await _get('getArtist', {'id': id}))['artist'] as Map<String, dynamic>;
+    final albums = json['album'] as List? ?? const [];
+    return (Artist.fromJson(json), [for (final album in albums) Album.fromJson(album as Map<String, dynamic>)]);
   }
 
   Uri streamUrl(String songId) => _url('stream', {'id': songId});

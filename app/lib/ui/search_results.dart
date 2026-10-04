@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import '../services.dart';
 import '../subsonic/models.dart';
 import 'album_page.dart';
+import 'artist_page.dart';
+import 'artists_view.dart';
 import 'cover.dart';
 import 'errors.dart';
 import 'now_playing_bar.dart';
 
-/// What a search found: albums, which open their page, and songs, which play.
+/// What a search found: artists and albums, which open their page, and songs, which play.
 class SearchResultsList extends StatelessWidget {
   const SearchResultsList(this.results, {super.key});
 
@@ -26,10 +28,18 @@ class SearchResultsList extends StatelessWidget {
       if (snapshot.hasError) return Center(child: Text('Não consegui buscar: ${snapshot.error}'));
       final results = snapshot.data;
       if (results == null) return const Center(child: CircularProgressIndicator());
-      final (:albums, :songs) = results;
-      if (albums.isEmpty && songs.isEmpty) return const Center(child: Text('Nada encontrado.'));
+      final (:artists, :albums, :songs) = results;
+      if (artists.isEmpty && albums.isEmpty && songs.isEmpty) return const Center(child: Text('Nada encontrado.'));
       return ListView(
         children: [
+          if (artists.isNotEmpty) const _Heading('Artistas'),
+          for (final artist in artists)
+            ListTile(
+              leading: _Thumbnail(artist.coverArt, round: true),
+              title: Text(artist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(albumCount(artist.albumCount)),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ArtistPage(artist))),
+            ),
           if (albums.isNotEmpty) const _Heading('Álbuns'),
           for (final album in albums)
             ListTile(
@@ -75,13 +85,18 @@ class _Heading extends StatelessWidget {
 }
 
 class _Thumbnail extends StatelessWidget {
-  const _Thumbnail(this.coverArt);
+  const _Thumbnail(this.coverArt, {this.round = false});
 
   final String? coverArt;
+
+  /// An artist's: round, with a person for a placeholder.
+  final bool round;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
     dimension: 48,
-    child: ClipRRect(borderRadius: BorderRadius.circular(4), child: Cover(coverArt, size: 96)),
+    child: round
+        ? ClipOval(child: Cover(coverArt, size: 96, icon: Icons.person_outline))
+        : ClipRRect(borderRadius: BorderRadius.circular(4), child: Cover(coverArt, size: 96)),
   );
 }
