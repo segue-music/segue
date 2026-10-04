@@ -1,13 +1,30 @@
 <p align="center"><img src="app/linux/runner/resources/app_icon.png" alt="" width="128"></p>
 
-# Segue
+<h1 align="center">Segue</h1>
 
-A draft of an open "Connect" protocol for music apps that use OpenSubsonic (Navidrome and others)
-or Jellyfin, with a reference hub. With it, each of your devices can see what the others are
-playing, control any of them, and move the music from one to another, like Spotify Connect, but
-across apps and servers.
+<h3 align="center">Spotify Connect for self-hosted music.</h3>
 
-Apps can't be commanded by anything on the server side unless they listen for it, so this is a
+<p align="center">
+  Each of your devices sees what the others are playing, controls any of them, and moves the music
+  from one to another without losing its place, across apps and servers. A draft of an open
+  protocol for apps on OpenSubsonic (Navidrome and others) or Jellyfin, a reference hub that runs
+  next to the media server, and a Spotify-like player built on them.
+</p>
+
+<p align="center">
+  <a href="SPEC.md">Protocol</a> ·
+  <a href="#hub">Hub</a> ·
+  <a href="app/README.md">App</a> ·
+  <a href="#next-steps">Next steps</a>
+</p>
+
+> [!NOTE]
+> **Vibe-coded.** The spec, the hub and the app were written by Claude (through Claude Code), with
+> a person deciding what to build and trying it on real devices. Every commit says so.
+
+---
+
+Apps can't be commanded by anything on the server side unless they listen for it, so Segue is a
 protocol that apps implement once, plus a small hub that runs next to the media server. The hub
 signs devices in with the credentials they already use with the media server, keeps the state of
 each player, and routes commands. Audio still comes from the media server. The problem, the design
