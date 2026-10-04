@@ -1,3 +1,5 @@
+<p align="center"><img src="app/linux/runner/resources/app_icon.png" alt="" width="128"></p>
+
 # Segue
 
 A draft of an open "Connect" protocol for music apps that use OpenSubsonic (Navidrome and others)

@@ -1,3 +1,5 @@
+<p align="center"><img src="linux/runner/resources/app_icon.png" alt="" width="128"></p>
+
 # Segue app
 
 A Spotify-like music player for Navidrome (or any OpenSubsonic server), built around Segue
