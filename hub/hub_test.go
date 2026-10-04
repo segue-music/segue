@@ -728,9 +728,10 @@ func TestStartingToPlayStopsTheOthers(t *testing.T) {
 			}
 		}
 	}
+	// One at a time: from two connections, the reports could reach the TV in either order.
 	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
-	speaker.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
 	stateFrom(tv, "phone")
+	speaker.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
 	stateFrom(tv, "speaker")
 
 	// The TV starts playing: the phone, which plays, stops; the paused speaker is left alone.
