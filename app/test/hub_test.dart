@@ -180,6 +180,22 @@ void main() {
     expect(phone.player.playing, isFalse);
   });
 
+  test('an app opened after another one that just opened shows the music on its own', () async {
+    final user = newUser();
+    final laptop = await App(user, 'laptop').start();
+    await laptop.player.playQueue(songs);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    await laptop.client.close();
+    // The laptop opens again and loads it, with nobody pressing anything; then the phone opens.
+    final again = await App(user, 'laptop').start();
+    await until(() => again.player.queue.isNotEmpty, 'the music on the laptop');
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final phone = await App(user, 'phone').start();
+    await until(() => phone.player.queue.isNotEmpty, 'the music on the phone');
+    expect(phone.connect.nowPlaying?.device, isNull);
+    expect(again.connect.nowPlaying?.device, isNull);
+  });
+
   test('opening while the last device is on and paused shows that device', () async {
     final user = newUser();
     final tv = await App(user, 'tv').start();

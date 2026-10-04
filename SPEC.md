@@ -246,21 +246,23 @@ the hub's own record, separate from the devices' states:
 - a device takes it over only by reporting `playing` with a queue; the device that holds it also
   updates it while paused (a seek, say);
 - a report without a queue never touches it: an app that has just opened, empty, does not wipe it;
-- when the device that holds it goes offline while playing, its clock stops: the position becomes
-  where playback had got to, and the status `paused`;
+- when the device that holds it goes offline, it lets go of it: its clock stops (the position
+  becomes where playback had got to, and the status `paused`), and no device holds it until one
+  plays. Coming back online doesn't give it back;
 - the reference hub can keep it on disk, so that it survives a restart.
 
-`welcome` carries it, with the queue in the device's API, when there is one:
+`welcome` carries it, with the queue in the device's API, when there is one. `deviceId` is the
+device that holds it, empty when none does; `deviceName` says where it was played:
 
 ```json
 { "type": "welcome", "...": "...",
   "lastPlayback": { "deviceId": "...", "deviceName": "Living room TV", "state": { "status": "paused", "positionMs": 40000, "at": 1790000000000, "index": 1, "queue": [] } } }
 ```
 
-An app that opens with nothing playing anywhere shows it: on its device, if that device is
-online (the app then controls it); otherwise here, loaded paused at the same point, so that play
-continues it here. Loading it doesn't take it over: until some device plays, every app that opens
-shows it the same way, on its own.
+An app that opens with nothing playing anywhere shows it: on the device that holds it, if one does
+(it is then online, and the app controls it); otherwise here, loaded paused at the same point, so
+that play continues it here. Loading it doesn't take it over: until some device plays, every app
+that opens shows it the same way, on its own.
 
 ## 8. Ids across APIs
 

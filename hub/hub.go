@@ -239,7 +239,7 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 		// as playing, before its first report, and the other apps would follow it.
 		e.state.pause(now.UnixMilli())
 	}
-	h.freezeLastPlayback(e)
+	h.releaseLastPlayback(e)
 	h.announce(e)
 	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name)
 }

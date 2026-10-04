@@ -13,7 +13,7 @@ import (
 // lastPlayback is a user's most recent playback (SPEC.md, "Last playback"): what the device that
 // played last had, kept across disconnects and, with a store, across restarts.
 type lastPlayback struct {
-	DeviceID   string       `json:"deviceId"`
+	DeviceID   string       `json:"deviceId"` // empty once that device went offline, until one plays
 	DeviceName string       `json:"deviceName"`
 	API        API          `json:"api"` // the id space of State.Queue
 	State      StampedState `json:"state"`
@@ -36,14 +36,17 @@ func (h *Hub) noteLastPlayback(e *entry) {
 	h.saveLast()
 }
 
-// freezeLastPlayback stops the clock of a last playback whose device went away while playing, at
-// the position it had reached. Call with h.mu held.
-func (h *Hub) freezeLastPlayback(e *entry) {
+// releaseLastPlayback lets go of the last playback when the device that holds it goes offline
+// (SPEC.md, section 7): its clock stops where playback had got to, and no device holds it until one
+// plays. An app that opens then shows it on its own, not on that device, even once it is back.
+// Call with h.mu held.
+func (h *Hub) releaseLastPlayback(e *entry) {
 	last := h.last[e.user]
-	if last == nil || last.DeviceID != e.info.ID || last.State.Status != Playing {
+	if last == nil || last.DeviceID != e.info.ID {
 		return
 	}
 	last.State.pause(h.opts.Now().UnixMilli())
+	last.DeviceID = ""
 	h.saveLast()
 }
 

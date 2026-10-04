@@ -499,14 +499,15 @@ func TestLastPlayback(t *testing.T) {
 	pc.report(map[string]any{"status": "stopped", "positionMs": 0, "queue": []any{}})
 	stateFrom(tv, "pc")
 
-	// The phone goes away while playing: its position freezes where it got to.
+	// The phone goes away while playing: its position freezes where it got to, and the phone lets
+	// go of it. The name still says where it played.
 	c.advance(10 * time.Second)
 	_ = phone.ws.Close()
 	tv.expectDevice("phone", func(d Device) bool { return !d.Online })
 
 	_, welcome := join(t, url, as("alice"), info("laptop", Subsonic, controller))
 	last := welcome.LastPlayback
-	if last == nil || last.DeviceID != "phone" || last.DeviceName != "phone" {
+	if last == nil || last.DeviceID != "" || last.DeviceName != "phone" {
 		t.Fatalf("last playback %+v", last)
 	}
 	if last.State.Status != Paused || last.State.PositionMs != 40000 || *last.State.Index != 1 {
@@ -561,16 +562,34 @@ func TestLastPlaybackMovesOnlyByPlaying(t *testing.T) {
 	tv.expect("state")
 
 	// The phone closes, and the TV loads its music paused, as an app does when it opens or when the
-	// device it followed closes: that isn't playing, so the phone keeps it.
+	// device it followed closes: that isn't playing, so nobody holds it. Nor does the phone, back
+	// and loading it again.
 	_ = phone.ws.Close()
 	tv.expectDevice("phone", func(d Device) bool { return !d.Online })
 	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
-	if got := lastOn(); got != "phone" {
+	if got := lastOn(); got != "" {
 		t.Fatalf("last playback on %q after the TV loaded it", got)
+	}
+	phone, _ = join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	phone.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
+	if got := lastOn(); got != "" {
+		t.Fatalf("last playback on %q after the phone came back", got)
 	}
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
 	if got := lastOn(); got != "tv" {
 		t.Fatalf("last playback on %q after the TV played", got)
+	}
+}
+
+func TestLastPlaybackStaysWithAPausedDeviceThatIsOn(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+	tv.report(map[string]any{"status": "paused", "positionMs": 5000})
+	time.Sleep(50 * time.Millisecond)
+	_, welcome := join(t, url, as("alice"), info("phone", Subsonic, controller))
+	if last := welcome.LastPlayback; last == nil || last.DeviceID != "tv" || last.State.PositionMs != 5000 {
+		t.Fatalf("last playback %+v", last)
 	}
 }
 
