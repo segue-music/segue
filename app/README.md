@@ -23,7 +23,7 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
 
 Not yet: playlists, the queue on screen, the media controls on the other
 platforms (Android's media session, iOS's Now Playing), an offline cache, settings, and the
-Android and iOS builds.
+iOS build. The Android build (phones and Android TV) has not been tried on a device yet.
 
 ## Code
 
@@ -89,6 +89,27 @@ To see two devices on one computer, start a second copy of the app as another de
 env SEGUE_DEVICE_ID=second SEGUE_DEVICE_NAME="Second copy" segue/segue
 ```
 
+## Running on Android and Android TV
+
+`tool/package-android.sh` builds `build/segue-android.apk` (with Flutter and the Android SDK from
+Docker, see below): one APK for every processor, signed with a debug key, to install by hand. On
+Android TV the app is in the home screen, and the remote drives it: the D-pad moves around (its
+center button presses, and a white ring shows where it is), and the play/pause, next and previous
+buttons drive playback.
+
+To install it from a computer with adb (`android-tools` on Fedora), turn on the TV's developer
+options (Settings > Device Preferences > About: press "Build" seven times) and, in them, network
+debugging. Then:
+
+```sh
+adb connect <TV address>
+adb install -r segue-android.apk
+```
+
+Newer Google TVs offer wireless debugging instead: `adb pair` with the address and code the TV
+shows, then `adb connect`. The TV has to reach the media server (and the hub) at the address used
+to sign in.
+
 ## Building and testing without Flutter installed
 
 `tool/flutter.sh` runs Flutter from a Docker image, as your user. The tests against the hub need
@@ -101,4 +122,11 @@ tool/flutter.sh analyze
 tool/flutter.sh test
 tool/flutter.sh build linux
 tool/package-linux.sh
+```
+
+For Android, a second image adds the JDK and the Android SDK and NDK to the first:
+
+```sh
+docker build -t segue-flutter-android -f tool/android.Dockerfile tool
+tool/package-android.sh
 ```

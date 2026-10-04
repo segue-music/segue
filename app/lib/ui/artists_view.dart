@@ -4,6 +4,7 @@ import '../services.dart';
 import '../subsonic/models.dart';
 import 'artist_page.dart';
 import 'cover.dart';
+import 'focus_ring.dart';
 
 /// "1 álbum", "5 álbuns"; empty when the server didn't say.
 String albumCount(int? count) => switch (count) {
@@ -66,19 +67,21 @@ class _ArtistTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ArtistPage(artist))),
-      child: Column(
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: ClipOval(child: Cover(artist.coverArt, icon: Icons.person_outline)),
-          ),
-          const SizedBox(height: 6),
-          Text(artist.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
-          Text(albumCount(artist.albumCount), maxLines: 1, style: text.bodySmall),
-        ],
+    return FocusRing(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ArtistPage(artist))),
+        child: Column(
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: ClipOval(child: Cover(artist.coverArt, icon: Icons.person_outline)),
+            ),
+            const SizedBox(height: 6),
+            Text(artist.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
+            Text(albumCount(artist.albumCount), maxLines: 1, style: text.bodySmall),
+          ],
+        ),
       ),
     );
   }

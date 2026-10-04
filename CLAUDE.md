@@ -55,6 +55,13 @@ tool/flutter.sh test --plain-name 'a refused hello is a final HubClosed'
 tool/package-linux.sh                         # release build → build/segue-linux-x64.tar.gz
 ```
 
+The Android build (phones and Android TV) uses a second image, with the JDK and Android SDK/NDK:
+
+```sh
+docker build -t segue-flutter-android -f tool/android.Dockerfile tool
+tool/package-android.sh                       # → build/segue-android.apk (debug-signed, every ABI)
+```
+
 With Flutter installed locally, the same commands work as `flutter ...` (`flutter run -d linux`).
 
 Test prerequisites:
@@ -117,6 +124,13 @@ Running two app instances on one machine as different devices:
   media controls. Linux (MPRIS) only for now.
 - `Session` keeps the Subsonic token and salt in secure storage and everything else in
   `shared_preferences`. The password itself is never stored.
+- Android TV: the remote drives the app through focus. `segueTheme` (`lib/ui/theme.dart`) gives
+  focused buttons a ring and everything else a strong tint, and `FocusRing` draws a ring on tiles
+  whose image hides the tint. `FocusRing` must keep the same widget tree with or without focus,
+  since rebuilding the child would drop its focus as soon as it arrived. On a TV
+  (`lib/television.dart`, asking `MainActivity.kt`), focus highlights are always on: Flutter starts
+  Android in touch mode and ignores key events from virtual keyboards, which is what
+  `adb shell input keyevent` sends. `TextFieldArrowShortcuts` lets up and down leave text fields.
 
 ## Conventions
 

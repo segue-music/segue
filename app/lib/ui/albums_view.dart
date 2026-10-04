@@ -4,6 +4,7 @@ import '../services.dart';
 import '../subsonic/models.dart';
 import 'album_page.dart';
 import 'cover.dart';
+import 'focus_ring.dart';
 
 /// The library's albums, newest first.
 class AlbumsView extends StatefulWidget {
@@ -82,20 +83,22 @@ class _AlbumTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AlbumPage(album))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AspectRatio(
-            aspectRatio: 1,
-            child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Cover(album.coverArt)),
-          ),
-          const SizedBox(height: 6),
-          Text(album.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
-          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodySmall),
-        ],
+    return FocusRing(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => AlbumPage(album))),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Cover(album.coverArt)),
+            ),
+            const SizedBox(height: 6),
+            Text(album.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
+            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodySmall),
+          ],
+        ),
       ),
     );
   }

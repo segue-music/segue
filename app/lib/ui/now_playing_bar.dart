@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover.dart';
 import 'devices_sheet.dart';
+import 'focus_ring.dart';
 import 'player_controls.dart';
 import 'player_page.dart';
 
@@ -35,29 +36,32 @@ class NowPlayingBar extends StatelessWidget {
                       Expanded(
                         child: Tooltip(
                           message: 'Abrir o player',
-                          child: InkWell(
+                          child: FocusRing(
                             borderRadius: BorderRadius.circular(4),
-                            onTap: () => PlayerPage.open(context),
-                            child: Row(
-                              children: [
-                                SizedBox.square(
-                                  dimension: 48,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Cover(now.coverArt, size: 96),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () => PlayerPage.open(context),
+                              child: Row(
+                                children: [
+                                  SizedBox.square(
+                                    dimension: 48,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: Cover(now.coverArt, size: 96),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(now.title ?? 'Nada tocando', maxLines: 1, overflow: TextOverflow.ellipsis),
-                                      Text(now.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-                                    ],
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(now.title ?? 'Nada tocando', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        Text(now.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),

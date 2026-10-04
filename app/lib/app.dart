@@ -6,6 +6,7 @@ import 'session.dart';
 import 'ui/home_page.dart';
 import 'ui/login_page.dart';
 import 'ui/shortcuts.dart';
+import 'ui/theme.dart';
 
 class SegueApp extends StatefulWidget {
   const SegueApp({required this.session, this.mediaControls, super.key});
@@ -69,15 +70,18 @@ class _SegueAppState extends State<SegueApp> {
     return MaterialApp(
       title: 'Segue',
       debugShowCheckedModeBanner: false,
-      theme: _theme(Brightness.light),
-      darkTheme: _theme(Brightness.dark),
+      theme: segueTheme(Brightness.light),
+      darkTheme: segueTheme(Brightness.dark),
       // Above the navigator, so that every page and sheet sees the services and the shortcuts.
-      builder: services == null
-          ? null
-          : (context, child) => ServicesScope(
-              services: services,
-              child: PlaybackShortcuts(child: child!),
-            ),
+      builder: (context, child) {
+        final page = TextFieldArrowShortcuts(child: child!);
+        if (services == null) return page;
+        return ServicesScope(
+          services: services,
+          // The media keys, too, where no system media session takes them.
+          child: PlaybackShortcuts(mediaKeys: widget.mediaControls == null, child: page),
+        );
+      },
       home: services != null
           ? HomePage(onSignOut: _signOut)
           : _starting
@@ -98,7 +102,3 @@ class _SegueAppState extends State<SegueApp> {
     );
   }
 }
-
-ThemeData _theme(Brightness brightness) => ThemeData(
-  colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: brightness),
-);
