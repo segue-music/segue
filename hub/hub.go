@@ -33,6 +33,9 @@ type Options struct {
 	// StatePath is a file where each user's last playback is kept across restarts. Empty keeps it
 	// in memory only. Call Close at shutdown so the last change gets written.
 	StatePath string
+	// Report tells the media server what each device plays (SPEC.md, section 12). Nil reports
+	// nothing.
+	Report Reporter
 }
 
 // Conn is the hub's side of one connection. Send and Close must not block: the hub calls them
@@ -54,14 +57,19 @@ type Hub struct {
 	pending map[string]*pending          // command id → command waiting for its answer
 	last    map[string]*lastPlayback     // user → last playback
 	store   *store                       // nil without StatePath
+	reports *reportQueue                 // nil without Report
 }
 
 type entry struct {
 	user     string
 	info     DeviceInfo
+	auth     Auth // while online, to report its playback with (SPEC.md, section 12)
 	conn     Conn // nil while offline
 	state    *StampedState
 	lastSeen time.Time
+	// reported is what the media server last heard of its playback, at hub time reportedAt.
+	reported   *Playback
+	reportedAt int64
 }
 
 type outcome struct {
@@ -96,6 +104,9 @@ func New(opts Options) *Hub {
 		for _, last := range h.last {
 			last.DeviceID = ""
 		}
+	}
+	if opts.Report != nil {
+		h.reports = startReports(opts.Report, log)
 	}
 	return h
 }
@@ -200,7 +211,7 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 	} else {
 		replaced = e.conn
 	}
-	e.info, e.conn, e.lastSeen = info, conn, h.opts.Now()
+	e.info, e.auth, e.conn, e.lastSeen = info, auth, conn, h.opts.Now()
 	if replaced != nil {
 		h.failPending(e, "offline")
 		replaced.Close(CloseReplaced, "the device connected again")
@@ -244,6 +255,8 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 		e.state.pause(now.UnixMilli())
 	}
 	h.releaseLastPlayback(e)
+	h.notePlayback(e)
+	e.auth = Auth{}
 	h.announce(e)
 	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name)
 }
@@ -289,6 +302,7 @@ func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
 	e.state.merge(report)
 	e.state.At, e.lastSeen = now.UnixMilli(), now
 	h.noteLastPlayback(e)
+	h.notePlayback(e)
 	if started {
 		h.stopOthers(e)
 	}

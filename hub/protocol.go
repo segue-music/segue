@@ -109,6 +109,9 @@ type DeviceInfo struct {
 	Roles   []Role `json:"roles"`
 	// Capabilities are the commands the device obeys as a player.
 	Capabilities []Action `json:"capabilities"`
+	// ReportsPlayback says the app tells the media server what it plays by itself, so the hub
+	// doesn't do it for it (SPEC.md, section 12).
+	ReportsPlayback bool `json:"reportsPlayback,omitempty"`
 }
 
 // clean checks the fields and drops repeated roles and capabilities. Capabilities this hub doesn't
@@ -200,14 +203,22 @@ func (s *StampedState) positionAt(now int64) int64 {
 		return s.PositionMs
 	}
 	position := s.PositionMs + max(0, now-s.At)
+	if item, ok := s.current(); ok && item.DurationMs > 0 {
+		position = min(position, item.DurationMs)
+	}
+	return position
+}
+
+// current is the queue's item at index, if there is one.
+func (s *PlayerState) current() (QueueItem, bool) {
 	index := 0
 	if s.Index != nil {
 		index = *s.Index
 	}
-	if index < len(s.Queue) && s.Queue[index].DurationMs > 0 {
-		position = min(position, s.Queue[index].DurationMs)
+	if index < len(s.Queue) {
+		return s.Queue[index], true
 	}
-	return position
+	return QueueItem{}, false
 }
 
 type Command struct {

@@ -51,6 +51,11 @@ SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
 | `SEGUE_STATE` | | A file where each user's last playback is kept across restarts (SPEC, section 7). Empty keeps it in memory only |
 | `SEGUE_AUTH` | | `none` accepts any device, as the Subsonic user it claims (`dev` for other schemes). Only for trying things out |
 
+The hub also tells the media server what each device plays, with the device's own credentials
+(SPEC, section 12), so Navidrome's Now Playing shows Segue's devices by name. It uses OpenSubsonic's
+`reportPlayback` (Navidrome 0.62 and later) where the server has it, and counts no plays. With
+`SEGUE_AUTH=none` it reports nothing.
+
 Clients find the hub at `/connect/` on the media server's origin, so route that path there in the
 reverse proxy. It must be `https`, because devices send their credentials.
 
@@ -61,8 +66,9 @@ listens on `0.0.0.0:8480`.
 
 1. The app: playlists, editing the queue (play next, add to it), and trying the iOS build on an
    iPhone and in a car (see [app/README.md](app/README.md)).
-2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`), as devices that
-   can be seen but not commanded. That covers apps like Symfonium, which is closed source.
+2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`, leaving out what
+   the hub reports itself), as devices that can be seen but not commanded. That covers apps like
+   Symfonium, which is closed source.
 3. Check, once an app on the Jellyfin API speaks the protocol, that Navidrome's two APIs give the
    same user names and that the ids translate on real items.
 4. Propose it: an OpenSubsonic discussion (next to

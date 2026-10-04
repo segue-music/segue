@@ -99,6 +99,11 @@ Running two app instances on one machine as different devices:
   its own API (`subsonic` or `jellyfin`).
 - `last.go` holds each user's "last playback" (SPEC section 7). It is the only state that can reach
   disk (`SEGUE_STATE`), written by a background store.
+- `report.go` tells the media server what each device plays (SPEC section 12), with the device's
+  credentials, which the hub holds only while it is connected. `notePlayback` decides when (another
+  track, play, pause or stop, a seek), and `reportQueue` sends from a goroutine of its own, so the
+  hub never waits on the media server. `SubsonicReporter` uses `reportPlayback` (OpenSubsonic
+  `playbackReport`), or `scrobble`'s now playing where the server lacks it.
 - `Handler` serves `/v1/info` and `/v1/ws` both at the root and under `/connect/`, whether or not
   the reverse proxy strips the prefix.
 - Hub tests (`hub_test.go`) drive real WebSocket connections against `httptest` servers.

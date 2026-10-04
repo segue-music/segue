@@ -63,15 +63,10 @@ func UpstreamAuthenticator(kind UpstreamKind, baseURL string, cacheFor time.Dura
 		if kind == KindJellyfin {
 			return "", false, nil
 		}
-		query := url.Values{"v": {"1.16.1"}, "c": {clientName}, "f": {"json"}}
+		query := subsonicQuery(auth, clientName)
 		endpoint := "ping"
-		if auth.Scheme == "subsonic" {
-			query.Set("u", auth.Username)
-			query.Set("t", auth.Token)
-			query.Set("s", auth.Salt)
-		} else {
+		if auth.Scheme != "subsonic" {
 			// An API key doesn't say whose it is: tokenInfo (OpenSubsonic apiKeyAuthentication) does.
-			query.Set("apiKey", auth.APIKey)
 			endpoint = "tokenInfo"
 		}
 		var body struct {
@@ -123,6 +118,19 @@ func UpstreamAuthenticator(kind UpstreamKind, baseURL string, cacheFor time.Dura
 		}
 		return user, ok, err
 	}
+}
+
+// subsonicQuery is the query of a Subsonic API call made with auth (subsonic or apiKey) by client.
+func subsonicQuery(auth Auth, client string) url.Values {
+	query := url.Values{"v": {"1.16.1"}, "c": {client}, "f": {"json"}}
+	if auth.Scheme == "subsonic" {
+		query.Set("u", auth.Username)
+		query.Set("t", auth.Token)
+		query.Set("s", auth.Salt)
+	} else {
+		query.Set("apiKey", auth.APIKey)
+	}
+	return query
 }
 
 // getJSON decodes a JSON answer into out. found is false for 401 and 403; other failures are errors.

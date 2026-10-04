@@ -51,7 +51,8 @@ The last one can be done with bridges ([section 11](#11-bridges)).
 - A **device** is one installation of an app. It is a **player** (plays audio and obeys commands),
   a **controller** (shows the other devices and commands them), or both.
 - The **hub** keeps, for each user, their devices and the last state of each player. It relays
-  state and routes commands. Only each user's last playback may go to disk
+  state and routes commands, and tells the media server what plays
+  ([section 12](#12-the-media-servers-now-playing)). Only each user's last playback may go to disk
   ([section 7](#7-last-playback)).
 
 ## 1. Discovery
@@ -68,7 +69,7 @@ the media server's origin to it. Clients should also accept a hub URL typed by t
 once per sign-in, not on every request.
 
 A server that implements the hub itself could advertise it instead, for instance as an OpenSubsonic
-extension in `getOpenSubsonicExtensions` ([open questions](#12-open-questions)).
+extension in `getOpenSubsonicExtensions` ([open questions](#13-open-questions)).
 
 ## 2. Connection and authentication
 
@@ -114,6 +115,9 @@ Subsonic's plain-password form (`p=`) is not accepted.
 - `roles`: `player`, `controller`, or both.
 - `capabilities`: the commands it obeys as a player ([section 5](#5-commands)). The hub ignores
   the ones it doesn't know, and so should apps, so that a newer app still works with an older hub.
+- `reportsPlayback` (optional): `true` when the app tells the media server what it plays by itself
+  (`scrobble`, `reportPlayback`), so that the hub doesn't do it for it
+  ([section 12](#12-the-media-servers-now-playing)).
 
 The hub answers with `welcome`:
 
@@ -300,8 +304,10 @@ how:
 
 ## 10. Security
 
-- The hub checks every connection with the media server. It keeps no credentials, only a few
-  minutes' cache of successful checks, keyed by a hash.
+- The hub checks every connection with the media server, and keeps a few minutes' cache of
+  successful checks, keyed by a hash. It holds a device's credentials only in memory, while the
+  device is connected, to report its playback ([section 12](#12-the-media-servers-now-playing)),
+  and never writes them to disk.
 - A device sees and commands only devices of the same user.
 - Commands reach only players, and only for the actions they declared.
 - `hello` carries credentials, so the hub must be reached over TLS (`wss://`) and run by the media
@@ -313,10 +319,32 @@ The hub only routes messages, so other programs can register devices of their ow
 
 - a Chromecast, UPnP or AirPlay bridge that registers each speaker as a player;
 - an observer that lists apps not speaking the protocol, by polling the server's now-playing data
-  (`getNowPlaying`, Jellyfin's `/Sessions`), as devices with no capabilities;
+  (`getNowPlaying`, Jellyfin's `/Sessions`), as devices with no capabilities, leaving out what the
+  hub reported itself ([section 12](#12-the-media-servers-now-playing));
 - a media server that implements the hub itself.
 
-## 12. Open questions
+## 12. The media server's now playing
+
+The media server has a "now playing" of its own (`getNowPlaying`, Navidrome's activity panel), which
+apps fill by reporting what they play. The hub fills it for its devices, so that music playing
+through Segue shows there under the name of the device that plays it:
+
+- It reports, with the device's own credentials, each change the media server shows: another track,
+  play, pause or stop, a seek. A new volume or queue isn't one. A device that goes offline is
+  reported stopped, since the hub can no longer tell what it plays.
+- `c`, the client's name in the Subsonic API, is the device's `name`, which the media server shows
+  as the player.
+- Where the server has OpenSubsonic's `playbackReport` extension (Navidrome 0.62 and later), the hub
+  calls `reportPlayback` with `ignoreScrobble`: what plays shows, and no play is counted. Elsewhere
+  it calls `scrobble` with `submission=false`, which knows no pause or stop: a paused track stays
+  listed until it would have ended.
+- It reports only for devices on the Subsonic API that sign in with `subsonic` or `apiKey`
+  credentials, and not for a device whose `hello` says, with `reportsPlayback`, that it reports by
+  itself. Jellyfin apps tell their server about their sessions themselves.
+
+The hub doesn't count plays (scrobbling) yet ([open questions](#13-open-questions)).
+
+## 13. Open questions
 
 - User identity across APIs on servers other than Navidrome (Jellyfin with a Subsonic plugin, for
   instance), where user names may not match.
@@ -329,6 +357,9 @@ The hub only routes messages, so other programs can register devices of their ow
   probe.
 - Waking mobile apps with push notifications.
 - Partial queue updates for very long queues.
+- Counting plays from the hub. The server counts a track when a report says it stopped past half of
+  it, so a track moved by a transfer, which stops on one device and ends on another, would count
+  twice.
 
 ## Related work
 

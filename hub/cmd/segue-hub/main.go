@@ -30,6 +30,7 @@ func main() {
 	upstream := os.Getenv("SEGUE_UPSTREAM")
 
 	var authenticate hub.Authenticator
+	var report hub.Reporter
 	if os.Getenv("SEGUE_AUTH") == "none" {
 		log.Warn("SEGUE_AUTH=none: every device is accepted, as the user it claims. Never expose this.")
 		authenticate = hub.DevAuthenticator
@@ -37,6 +38,9 @@ func main() {
 		fail("SEGUE_UPSTREAM is required (the media server's URL)")
 	} else {
 		authenticate = hub.UpstreamAuthenticator(kind, upstream, 5*time.Minute)
+		if kind != hub.KindJellyfin {
+			report = hub.SubsonicReporter(upstream)
+		}
 	}
 	translate := hub.NoTranslation
 	if kind == hub.KindNavidrome {
@@ -44,7 +48,7 @@ func main() {
 	}
 	h := hub.New(hub.Options{
 		Authenticate: authenticate, Translate: translate, Logger: log,
-		StatePath: os.Getenv("SEGUE_STATE"),
+		StatePath: os.Getenv("SEGUE_STATE"), Report: report,
 	})
 
 	listener, err := net.Listen("tcp", env("SEGUE_LISTEN", "127.0.0.1:8480"))
