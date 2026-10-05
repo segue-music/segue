@@ -127,7 +127,7 @@ func JellyfinReporter(baseURL string) Reporter {
 		switch {
 		case p.Status == Stopped:
 			endpoint = "/Sessions/Playing/Stopped"
-		case p.Status == Playing && p.PositionMs < seekMs && !now.counted:
+		case starts(p) && !now.counted:
 			endpoint, now.counted = "/Sessions/Playing", true
 		}
 		body, err := json.Marshal(map[string]any{
@@ -202,6 +202,10 @@ func UpstreamReporter(kind UpstreamKind, baseURL string) Reporter {
 // seekMs is how far a device's position may stray from where the hub expects it before the media
 // server hears of it: further, it was a seek.
 const seekMs = 2000
+
+// starts says whether p is a track that starts playing from its start, which Jellyfin counts as a
+// play.
+func starts(p Playback) bool { return p.Status == Playing && p.PositionMs < seekMs }
 
 // reportAgainAfter is how long a playing or paused device goes without a report before the media
 // server hears of it again, unchanged: Jellyfin stops a playback it hears nothing of for a while.
@@ -282,8 +286,8 @@ func (h *Hub) reportAgain() {
 
 // reportQueue hands the hub's reports to the Reporter from a goroutine of its own, so the hub never
 // waits on the media server. Of a device's reports of one track waiting, only the newest is sent:
-// it says all the media server needs. A stop is always sent, so that the media server hears where a
-// track ended before the next one starts.
+// it says all the media server needs. Stops and starts are always sent, in order: the media server
+// hears where a track ended before the next one starts, and Jellyfin counts a play by a start.
 type reportQueue struct {
 	report  Reporter
 	log     *slog.Logger
@@ -307,8 +311,9 @@ func startReports(report Reporter, log *slog.Logger) *reportQueue {
 func (q *reportQueue) add(e *entry, p Playback) {
 	q.mu.Lock()
 	list := q.pending[e]
-	if n := len(list); n > 0 && list[n-1].ID == p.ID && list[n-1].Status != Stopped && p.Status != Stopped {
-		list[n-1] = p
+	n := len(list)
+	if n > 0 && list[n-1].ID == p.ID && p.Status != Stopped && list[n-1].Status != Stopped && !starts(list[n-1]) {
+		list[n-1] = p // it says all the one waiting did
 	} else {
 		list = append(list, p)
 	}

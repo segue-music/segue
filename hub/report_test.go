@@ -161,7 +161,7 @@ func noReport(t *testing.T, reported chan Playback) {
 	}
 }
 
-func TestReportQueueKeepsStops(t *testing.T) {
+func TestReportQueueKeepsStopsAndStarts(t *testing.T) {
 	var sent []Playback
 	q := &reportQueue{
 		report:  func(_ context.Context, p Playback) error { sent = append(sent, p); return nil },
@@ -169,16 +169,19 @@ func TestReportQueueKeepsStops(t *testing.T) {
 		wake:    make(chan struct{}, 1),
 	}
 	tv := &entry{}
-	q.add(tv, Playback{ID: dreamOn, Status: Playing, PositionMs: 1000})
-	q.add(tv, Playback{ID: dreamOn, Status: Playing, PositionMs: 9000}) // says all the first did
+	q.add(tv, Playback{ID: dreamOn, Status: Playing, PositionMs: 3000})
+	q.add(tv, Playback{ID: dreamOn, Status: Playing, PositionMs: 9000}) // says all the one before did
 	q.add(tv, Playback{ID: dreamOn, Status: Stopped, PositionMs: 268000})
+	// A track that starts, paused right away: the start stays, since Jellyfin counts a play by it.
 	q.add(tv, Playback{ID: other, Status: Playing})
 	q.add(tv, Playback{ID: other, Status: Paused, PositionMs: 2000})
+	q.add(tv, Playback{ID: other, Status: Playing, PositionMs: 2000})
 	q.send()
 	want := []Playback{
 		{ID: dreamOn, Status: Playing, PositionMs: 9000},
 		{ID: dreamOn, Status: Stopped, PositionMs: 268000},
-		{ID: other, Status: Paused, PositionMs: 2000},
+		{ID: other, Status: Playing},
+		{ID: other, Status: Playing, PositionMs: 2000},
 	}
 	if !slices.Equal(sent, want) {
 		t.Fatalf("sent %+v, want %+v", sent, want)
