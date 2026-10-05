@@ -55,9 +55,7 @@ func main() {
 		authenticate = hub.DevAuthenticator
 	} else {
 		authenticate = hub.UpstreamAuthenticator(kind, upstream, 5*time.Minute)
-		if kind != hub.KindJellyfin {
-			report = hub.SubsonicReporter(upstream)
-		}
+		report = hub.UpstreamReporter(kind, upstream)
 	}
 	translate := hub.NoTranslation
 	if kind == hub.KindNavidrome {

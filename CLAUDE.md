@@ -107,8 +107,12 @@ Running two app instances on one machine as different devices:
 - `report.go` tells the media server what each device plays (SPEC section 12), with the device's
   credentials, which the hub holds only while it is connected. `notePlayback` decides when (another
   track, play, pause or stop, a seek), and `reportQueue` sends from a goroutine of its own, so the
-  hub never waits on the media server. `SubsonicReporter` uses `reportPlayback` (OpenSubsonic
-  `playbackReport`), or `scrobble`'s now playing where the server lacks it.
+  hub never waits on the media server; it keeps stops, so that a track ends before the next starts.
+  `reportAgain` repeats an unchanged report every minute, since Jellyfin drops a playback it hears
+  nothing of. `UpstreamReporter` picks the API by the device's credentials: `SubsonicReporter` uses
+  `reportPlayback` (OpenSubsonic `playbackReport`), or `scrobble`'s now playing where the server
+  lacks it; `JellyfinReporter` uses Jellyfin's sessions, signed as the device, and counts a play
+  (`Sessions/Playing`) only for a track that starts from its start.
 - `Handler` serves `/v1/info` and `/v1/ws` both at the root and under `/connect/`, whether or not
   the reverse proxy strips the prefix.
 - Hub tests (`hub_test.go`) drive real WebSocket connections against `httptest` servers.

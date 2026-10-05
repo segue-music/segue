@@ -109,14 +109,20 @@ func DevAuthenticator(_ context.Context, auth Auth) (string, bool, error) {
 
 const clientName = "segue-hub"
 
+// jellyfinBase is where the media server at baseURL has its Jellyfin API.
+func jellyfinBase(kind UpstreamKind, baseURL string) string {
+	base := strings.TrimRight(baseURL, "/")
+	if kind == KindNavidrome {
+		return base + "/jellyfin"
+	}
+	return base
+}
+
 // UpstreamAuthenticator checks credentials with the media server itself, so the hub keeps no users
 // or passwords of its own. Successful checks are cached for cacheFor.
 func UpstreamAuthenticator(kind UpstreamKind, baseURL string, cacheFor time.Duration) Authenticator {
 	base := strings.TrimRight(baseURL, "/")
-	jellyfinBase := base
-	if kind == KindNavidrome {
-		jellyfinBase += "/jellyfin"
-	}
+	jellyfinBase := jellyfinBase(kind, baseURL)
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	check := func(ctx context.Context, auth Auth) (string, bool, error) {

@@ -58,6 +58,8 @@ type Hub struct {
 	last    map[string]*lastPlayback     // user → last playback
 	store   *store                       // nil without StatePath
 	reports *reportQueue                 // nil without Report
+	// stopReportingAgain stops the ticker that calls reportAgain; nil without Report.
+	stopReportingAgain func()
 }
 
 type entry struct {
@@ -107,6 +109,21 @@ func New(opts Options) *Hub {
 	}
 	if opts.Report != nil {
 		h.reports = startReports(opts.Report, log)
+		ticker, done := time.NewTicker(reportAgainAfter/4), make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					h.reportAgain()
+				case <-done:
+					return
+				}
+			}
+		}()
+		h.stopReportingAgain = func() {
+			ticker.Stop()
+			close(done)
+		}
 	}
 	return h
 }

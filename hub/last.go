@@ -70,6 +70,7 @@ func (h *Hub) Close() {
 		h.store.close()
 	}
 	if h.reports != nil {
+		h.stopReportingAgain()
 		h.reports.close()
 	}
 }

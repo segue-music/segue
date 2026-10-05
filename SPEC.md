@@ -325,24 +325,38 @@ The hub only routes messages, so other programs can register devices of their ow
 
 ## 12. The media server's now playing
 
-The media server has a "now playing" of its own (`getNowPlaying`, Navidrome's activity panel), which
-apps fill by reporting what they play. The hub fills it for its devices, so that music playing
-through Segue shows there under the name of the device that plays it:
+The media server has a "now playing" of its own (`getNowPlaying`, Navidrome's activity panel,
+Jellyfin's sessions), which apps fill by reporting what they play. The hub fills it for its devices,
+so that music playing through Segue shows there under the name of the device that plays it:
 
 - It reports, with the device's own credentials, each change the media server shows: another track,
-  play, pause or stop, a seek. A new volume or queue isn't one. A device that goes offline is
-  reported stopped, since the hub can no longer tell what it plays.
-- `c`, the client's name in the Subsonic API, is the device's `name`, which the media server shows
-  as the player.
-- Where the server has OpenSubsonic's `playbackReport` extension (Navidrome 0.62 and later), the hub
-  calls `reportPlayback` with `ignoreScrobble`: what plays shows, and no play is counted. Elsewhere
-  it calls `scrobble` with `submission=false`, which knows no pause or stop: a paused track stays
-  listed until it would have ended.
-- It reports only for devices on the Subsonic API that sign in with `subsonic` or `apiKey`
-  credentials, and not for a device whose `hello` says, with `reportsPlayback`, that it reports by
-  itself. Jellyfin apps tell their server about their sessions themselves.
+  play, pause or stop, a seek. A new volume or queue isn't one. Another track first stops the one
+  before, where it got to. A device that goes offline is reported stopped, since the hub can no
+  longer tell what it plays. A device that plays, or is paused, is reported again, unchanged, after
+  a minute without a report, since Jellyfin stops a playback it hears nothing of.
+- It reports in the API of the device's credentials, in which the device's ids are: the Subsonic API
+  for `subsonic` and `apiKey`, Jellyfin's (under `/jellyfin` on Navidrome) for `jellyfin`. A device
+  whose `api` isn't that of its credentials isn't reported.
+- In the Subsonic API, `c`, the client's name, is the device's `name`, which the media server shows
+  as the player. Where the server has OpenSubsonic's `playbackReport` extension (Navidrome 0.62 and
+  later), the hub calls `reportPlayback` with `ignoreScrobble`: what plays shows, and no play is
+  counted. Elsewhere it calls `scrobble` with `submission=false`, which knows no pause or stop: a
+  paused track stays listed until it would have ended.
+- In Jellyfin's API, the hub signs each report as the device signs its own requests: its token,
+  with the device's `id` as `DeviceId`, `client` as `Client`, `name` as `Device` and `version`.
+  The media server then takes it for the device's own, and shows the name and app the device signed
+  in with. So a Jellyfin app that speaks Segue uses its Segue device `id` as its Jellyfin
+  `DeviceId`. A track starts with `Sessions/Playing`, goes on with `Sessions/Playing/Progress` and
+  ends with `Sessions/Playing/Stopped`, which always carries where it stopped.
+- It doesn't report for a device whose `hello` says, with `reportsPlayback`, that it reports by
+  itself, as most Jellyfin apps do.
 
-The hub doesn't count plays (scrobbling) yet ([open questions](#13-open-questions)).
+Plays are counted as each API counts them. In the Subsonic API the hub counts none
+(`ignoreScrobble`). Jellyfin counts one on each `Sessions/Playing`, so the hub sends it only for a
+track that starts playing from its start, and `Sessions/Playing/Progress` for one that it hears of
+later (moved from another device, or the device back online), which shows it without counting.
+Navidrome's Jellyfin API counts a play when a track stops past half of it or four minutes
+([open questions](#13-open-questions)).
 
 ## 13. Open questions
 
@@ -357,9 +371,10 @@ The hub doesn't count plays (scrobbling) yet ([open questions](#13-open-question
   probe.
 - Waking mobile apps with push notifications.
 - Partial queue updates for very long queues.
-- Counting plays from the hub. The server counts a track when a report says it stopped past half of
-  it, so a track moved by a transfer, which stops on one device and ends on another, would count
-  twice.
+- Counting plays from the hub in the Subsonic API. The server counts a track when a report says it
+  stopped past half of it, so a track moved by a transfer, which stops on one device and ends on
+  another, would count twice. Navidrome's Jellyfin API counts the same way, so there a transfer past
+  half of a track counts it twice already.
 
 ## Related work
 

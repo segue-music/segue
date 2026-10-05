@@ -1,11 +1,15 @@
 package hub
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,7 +21,10 @@ import (
 type Playback struct {
 	Auth       Auth   // the device's own credentials
 	Device     string // the device's name, which the media server shows as the player
-	ID         string // the track, in the Subsonic API
+	DeviceID   string // the device's id, app and version, with which Jellyfin's API knows it too
+	Client     string
+	Version    string
+	ID         string // the track, in the API of the credentials: Jellyfin's for a jellyfin token
 	Status     Status
 	PositionMs int64
 }
@@ -94,19 +101,123 @@ type extension struct {
 	Name string `json:"name"`
 }
 
+// JellyfinReporter reports through Jellyfin's sessions API at baseURL, signed as the device itself
+// signs its requests: its token, id, app, name and version. Jellyfin counts a play on each
+// Sessions/Playing, so only a track that starts playing from its start gets one; a track it hears
+// of later (moved from another device, or the device back online) and the same track again go to
+// Sessions/Playing/Progress, which shows it without counting. Sessions/Playing/Stopped always says
+// where the track stopped: without it, Jellyfin would count another play, and Navidrome's Jellyfin
+// API counts one by it.
+func JellyfinReporter(baseURL string) Reporter {
+	base := strings.TrimRight(baseURL, "/")
+	client := &http.Client{Timeout: 5 * time.Second}
+	type started struct {
+		id      string
+		counted bool // Sessions/Playing went for it
+	}
+	var mu sync.Mutex
+	playing := map[string]started{} // by token: the track the media server has as playing
+	return func(ctx context.Context, p Playback) error {
+		mu.Lock()
+		defer mu.Unlock()
+		token := p.Auth.Token
+		last := playing[token]
+		now := started{id: p.ID, counted: last.id == p.ID && last.counted}
+		endpoint := "/Sessions/Playing/Progress"
+		switch {
+		case p.Status == Stopped:
+			endpoint = "/Sessions/Playing/Stopped"
+		case p.Status == Playing && p.PositionMs < seekMs && !now.counted:
+			endpoint, now.counted = "/Sessions/Playing", true
+		}
+		body, err := json.Marshal(map[string]any{
+			"ItemId":        p.ID,
+			"PositionTicks": p.PositionMs * 10_000, // 10 million to the second
+			"IsPaused":      p.Status == Paused,
+			"CanSeek":       true,
+			"PlayMethod":    "DirectPlay",
+		})
+		if err != nil {
+			return err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+endpoint, bytes.NewReader(body))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", jellyfinAuthorization(p))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := client.Do(req)
+		if err != nil {
+			var urlErr *url.Error
+			if errors.As(err, &urlErr) {
+				err = urlErr.Err
+			}
+			return fmt.Errorf("%s: %w", endpoint, err)
+		}
+		_ = res.Body.Close()
+		switch {
+		case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
+			return fmt.Errorf("%s: credentials rejected", endpoint)
+		case res.StatusCode/100 != 2:
+			return fmt.Errorf("%s: HTTP %d", endpoint, res.StatusCode)
+		}
+		if p.Status == Stopped {
+			delete(playing, token)
+		} else {
+			playing[token] = now
+		}
+		return nil
+	}
+}
+
+// jellyfinAuthorization signs a report as the device signs its own requests. Jellyfin would take
+// the token alone for its device; Navidrome's Jellyfin API needs the rest to tell the player, and
+// without a player it shows the playback nameless and counts no play. The values are URL-encoded,
+// spaces as %20: Jellyfin decodes a + as a space, and Navidrome doesn't.
+func jellyfinAuthorization(p Playback) string {
+	var fields []string
+	for _, field := range [][2]string{
+		{"Client", p.Client}, {"Device", p.Device}, {"DeviceId", p.DeviceID}, {"Version", p.Version}, {"Token", p.Auth.Token},
+	} {
+		if field[1] != "" { // an empty one Jellyfin takes from the device the token belongs to
+			fields = append(fields, field[0]+`="`+strings.ReplaceAll(url.QueryEscape(field[1]), "+", "%20")+`"`)
+		}
+	}
+	return "MediaBrowser " + strings.Join(fields, ", ")
+}
+
+// UpstreamReporter reports to the media server at baseURL in the API of each device's credentials:
+// Jellyfin's sessions for a jellyfin token (under /jellyfin on Navidrome), the Subsonic API for the
+// others.
+func UpstreamReporter(kind UpstreamKind, baseURL string) Reporter {
+	subsonic, jellyfin := SubsonicReporter(baseURL), JellyfinReporter(jellyfinBase(kind, baseURL))
+	return func(ctx context.Context, p Playback) error {
+		if p.Auth.Scheme == "jellyfin" {
+			return jellyfin(ctx, p)
+		}
+		return subsonic(ctx, p)
+	}
+}
+
 // seekMs is how far a device's position may stray from where the hub expects it before the media
 // server hears of it: further, it was a seek.
 const seekMs = 2000
 
+// reportAgainAfter is how long a playing or paused device goes without a report before the media
+// server hears of it again, unchanged: Jellyfin stops a playback it hears nothing of for a while.
+const reportAgainAfter = time.Minute
+
 // notePlayback tells the media server what e plays now, if that changed for it: another track,
 // play, pause or stop, a seek, or e going offline (SPEC.md, section 12). Call with h.mu held.
 func (h *Hub) notePlayback(e *entry) {
-	if h.reports == nil || e.state == nil || e.info.ReportsPlayback || e.info.API != Subsonic ||
-		(e.auth.Scheme != "subsonic" && e.auth.Scheme != "apiKey") {
+	if h.reports == nil || e.state == nil || e.info.ReportsPlayback || !reportable(e) {
 		return
 	}
 	now := h.opts.Now().UnixMilli()
-	p := Playback{Auth: e.auth, Device: e.info.Name, Status: e.state.Status, PositionMs: e.state.positionAt(now)}
+	p := Playback{
+		Auth: e.auth, Device: e.info.Name, DeviceID: e.info.ID, Client: e.info.Client, Version: e.info.Version,
+		Status: e.state.Status, PositionMs: e.state.positionAt(now),
+	}
 	if item, ok := e.state.current(); ok {
 		p.ID = item.ID
 	}
@@ -114,32 +225,70 @@ func (h *Hub) notePlayback(e *entry) {
 		p.Status = Stopped // nothing the media server could show, or nothing the hub can tell
 	}
 	last := e.reported
-	if p.Status == Stopped {
+	var reached int64 // where the track the media server has got to
+	if last != nil {
+		reached = last.PositionMs
+		if last.Status == Playing {
+			reached += now - e.reportedAt
+		}
+	}
+	switch {
+	case p.Status == Stopped:
 		if last == nil || last.Status == Stopped {
 			return
 		}
-		p.ID = last.ID // the media server ignores a stop for another track than the one it has
-	} else if last != nil && last.ID == p.ID && last.Status == p.Status && last.Device == p.Device {
-		expected := last.PositionMs
-		if last.Status == Playing {
-			expected += now - e.reportedAt
-		}
-		if d := p.PositionMs - expected; -seekMs <= d && d <= seekMs {
+		// The media server ignores a stop for another track than the one it has, and counts a play
+		// by where it stopped.
+		p.ID, p.PositionMs = last.ID, reached
+	case last != nil && last.ID == p.ID && last.Status == p.Status && last.Device == p.Device:
+		if d := p.PositionMs - reached; -seekMs <= d && d <= seekMs && now-e.reportedAt < reportAgainAfter.Milliseconds() {
 			return
 		}
+	case last != nil && last.Status != Stopped && last.ID != p.ID:
+		// Another track: the one before stops where it got to.
+		stop := *last
+		stop.Status, stop.PositionMs = Stopped, reached
+		h.reports.add(e, stop)
 	}
 	e.reported, e.reportedAt = &p, now
 	h.reports.add(e, p)
 }
 
+// reportable says whether the media server can hear of e's playback: its ids are in the API of its
+// credentials, which the hub reports with.
+func reportable(e *entry) bool {
+	switch e.auth.Scheme {
+	case "subsonic", "apiKey":
+		return e.info.API == Subsonic
+	case "jellyfin":
+		return e.info.API == Jellyfin
+	}
+	return false
+}
+
+// reportAgain tells the media server again what each connected device plays, where it hasn't heard
+// of it for reportAgainAfter.
+func (h *Hub) reportAgain() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, devices := range h.users {
+		for _, e := range devices {
+			if e.conn != nil {
+				h.notePlayback(e)
+			}
+		}
+	}
+}
+
 // reportQueue hands the hub's reports to the Reporter from a goroutine of its own, so the hub never
-// waits on the media server. Only a device's newest report waiting is sent: it says all the media
-// server needs.
+// waits on the media server. Of a device's reports of one track waiting, only the newest is sent:
+// it says all the media server needs. A stop is always sent, so that the media server hears where a
+// track ended before the next one starts.
 type reportQueue struct {
 	report  Reporter
 	log     *slog.Logger
 	mu      sync.Mutex
-	pending map[*entry]Playback
+	pending map[*entry][]Playback
 	wake    chan struct{}
 	done    chan struct{}
 	stopped chan struct{}
@@ -148,7 +297,7 @@ type reportQueue struct {
 
 func startReports(report Reporter, log *slog.Logger) *reportQueue {
 	q := &reportQueue{
-		report: report, log: log, pending: map[*entry]Playback{},
+		report: report, log: log, pending: map[*entry][]Playback{},
 		wake: make(chan struct{}, 1), done: make(chan struct{}), stopped: make(chan struct{}),
 	}
 	go q.run()
@@ -157,7 +306,13 @@ func startReports(report Reporter, log *slog.Logger) *reportQueue {
 
 func (q *reportQueue) add(e *entry, p Playback) {
 	q.mu.Lock()
-	q.pending[e] = p
+	list := q.pending[e]
+	if n := len(list); n > 0 && list[n-1].ID == p.ID && list[n-1].Status != Stopped && p.Status != Stopped {
+		list[n-1] = p
+	} else {
+		list = append(list, p)
+	}
+	q.pending[e] = list
 	q.mu.Unlock()
 	select {
 	case q.wake <- struct{}{}:
@@ -181,14 +336,16 @@ func (q *reportQueue) run() {
 func (q *reportQueue) send() {
 	q.mu.Lock()
 	reports := q.pending
-	q.pending = map[*entry]Playback{}
+	q.pending = map[*entry][]Playback{}
 	q.mu.Unlock()
-	for _, p := range reports {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		if err := q.report(ctx, p); err != nil {
-			q.log.Warn("can't report to the media server", "device", p.Device, "err", err)
+	for _, list := range reports {
+		for _, p := range list {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if err := q.report(ctx, p); err != nil {
+				q.log.Warn("can't report to the media server", "device", p.Device, "err", err)
+			}
+			cancel()
 		}
-		cancel()
 	}
 }
 
