@@ -58,7 +58,7 @@ const artist = {
 void main() {
   test('requests carry the token in the Authorization header, as this device', () async {
     final asked = <http.Request>[];
-    await jellyfin((_) => items([]), asked).albums();
+    await jellyfin((_) => items([]), asked).albums(order: AlbumOrder.latest);
     expect(
       asked.single.headers['Authorization'],
       'MediaBrowser Client="Segue", Device="laptop", DeviceId="d1", Version="$appVersion", Token="tok"',
@@ -67,9 +67,9 @@ void main() {
     expect(asked.single.url.queryParameters, containsPair('userId', 'u1'));
   });
 
-  test('albums: the newest first, with their covers, artist, year and number of songs', () async {
+  test('albums: the latest added first, with their covers, artist, year and number of songs', () async {
     final asked = <http.Request>[];
-    final albums = await jellyfin((_) => items([album]), asked).albums(size: 20, offset: 40);
+    final albums = await jellyfin((_) => items([album]), asked).albums(order: AlbumOrder.latest, size: 20, offset: 40);
     final query = asked.single.url.queryParameters;
     expect(query, containsPair('IncludeItemTypes', 'MusicAlbum'));
     expect(query, containsPair('Recursive', 'true'));
@@ -83,6 +83,17 @@ void main() {
       ('a1', 'Toys in the Attic', 'Aerosmith', 1975, 9),
     );
     expect(first.coverArt, 'a1');
+  });
+
+  test('albums by name', () async {
+    final asked = <http.Request>[];
+    await jellyfin((_) => items([album]), asked).albums(order: AlbumOrder.name, size: 200, offset: 400);
+    final query = asked.single.url.queryParameters;
+    expect(query, containsPair('IncludeItemTypes', 'MusicAlbum'));
+    expect(query['SortBy'], startsWith('SortName'));
+    expect(query, containsPair('SortOrder', 'Ascending'));
+    expect(query, containsPair('Limit', '200'));
+    expect(query, containsPair('StartIndex', '400'));
   });
 
   test('most played albums: Jellyfin counts plays by song, so they add up by album', () async {
@@ -199,7 +210,11 @@ void main() {
 
   test('a sign-in the server forgot is an auth error, also from pages that ask for two things at once', () async {
     final forgot = jellyfin((_) => http.Response('', 401));
-    for (final request in [forgot.albums, () => forgot.album('a1'), () => forgot.search('aero')]) {
+    for (final request in [
+      () => forgot.albums(order: AlbumOrder.name),
+      () => forgot.album('a1'),
+      () => forgot.search('aero'),
+    ]) {
       await expectLater(request(), throwsA(isA<ServerError>().having((e) => e.isAuth, 'isAuth', isTrue)));
     }
   });

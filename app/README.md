@@ -16,11 +16,11 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
 - a home, where the app opens, with a row of the albums the user plays most and one of the latest
   added to the library, 20 each, with arrows in each row's corner to go a screenful forward and
   back (on a Jellyfin server, which counts plays only by song, an album's plays are its songs',
-  added up); albums (the latest added first) and artists (by name, each with their albums); all
-  three in a side rail or, on a phone, a bar at the bottom; the album page; search (artists, albums
-  and songs); and playback through media_kit (libmpv), with a seek bar, shuffle and repeat (the
-  queue or the track), in the player bar and in a full-screen player that the song in the bar
-  opens;
+  added up); albums (by name, the next ones coming as the grid nears its end) and artists (by
+  name, each with their albums); all three in a side rail or, on a phone, a bar at the bottom; the
+  album page; search (artists, albums and songs); and playback through media_kit (libmpv), with a
+  seek bar, shuffle and repeat (the queue or the track), in the player bar and in a full-screen
+  player that the song in the bar opens;
 - the queue of whichever device the app controls, from the full-screen player or, on a wide
   screen, the player bar: the current track on top, the next ones under it and what played before
   above it. A tap on a track plays it there;

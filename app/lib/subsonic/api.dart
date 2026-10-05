@@ -48,16 +48,26 @@ class SubsonicApi implements MediaServer {
 
   Future<void> ping() => _get('ping');
 
-  /// Albums in a list type of getAlbumList2: newest, recent, frequent, random, alphabeticalByName…
+  /// Albums by name are getAlbumList2's alphabeticalByName; the latest added, its newest.
   @override
-  Future<List<Album>> albums({String type = 'newest', int size = 100, int offset = 0}) async {
+  Future<List<Album>> albums({required AlbumOrder order, int size = 100, int offset = 0}) => _albumList(
+    switch (order) {
+      AlbumOrder.latest => 'newest',
+      AlbumOrder.name => 'alphabeticalByName',
+    },
+    size: size,
+    offset: offset,
+  );
+
+  @override
+  Future<List<Album>> mostPlayedAlbums({int size = 20}) => _albumList('frequent', size: size);
+
+  /// Albums in a list type of getAlbumList2: newest, recent, frequent, random, alphabeticalByName…
+  Future<List<Album>> _albumList(String type, {required int size, int offset = 0}) async {
     final body = await _get('getAlbumList2', {'type': type, 'size': '$size', 'offset': '$offset'});
     final list = (body['albumList2'] as Map<String, dynamic>?)?['album'] as List? ?? const [];
     return [for (final album in list) _album(album as Map<String, dynamic>)];
   }
-
-  @override
-  Future<List<Album>> mostPlayedAlbums({int size = 20}) => albums(type: 'frequent', size: size);
 
   @override
   Future<(Album, List<Song>)> album(String id) async {

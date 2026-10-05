@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../server/models.dart';
+import '../server/server.dart';
 import '../services.dart';
 import 'albums_view.dart';
 
@@ -33,7 +34,7 @@ class _HomeViewState extends State<HomeView> {
   void _load() {
     final api = ServicesScope.of(context).api;
     _mostPlayed = api.mostPlayedAlbums(size: _limit);
-    _latest = api.albums(size: _limit);
+    _latest = api.albums(order: AlbumOrder.latest, size: _limit);
     _loaded = true;
   }
 

@@ -83,13 +83,31 @@ void main() {
         });
       }),
     );
-    final albums = await api.albums();
+    final albums = await api.albums(order: AlbumOrder.latest);
     expect(albums.single.name, 'Aerosmith');
     expect(albums.single.year, 1973);
     final (_, songs) = await api.album('a1');
     expect(songs.single.title, 'Dream On');
     expect(songs.single.duration, const Duration(seconds: 268));
     expect(songs.single.toQueueItem().durationMs, 268000);
+  });
+
+  test('albums by name are getAlbumList2\'s alphabeticalByName, and the latest added its newest', () async {
+    final asked = <Uri>[];
+    final api = SubsonicApi(
+      Uri.parse('https://music.test'),
+      credentials,
+      client: MockClient((request) async {
+        asked.add(request.url);
+        return subsonic({'status': 'ok', 'albumList2': <String, Object?>{}});
+      }),
+    );
+    await api.albums(order: AlbumOrder.name, size: 200, offset: 400);
+    await api.albums(order: AlbumOrder.latest, size: 20);
+    expect(asked.first.queryParameters, containsPair('type', 'alphabeticalByName'));
+    expect(asked.first.queryParameters, containsPair('size', '200'));
+    expect(asked.first.queryParameters, containsPair('offset', '400'));
+    expect(asked.last.queryParameters, containsPair('type', 'newest'));
   });
 
   test('the most played albums are getAlbumList2\'s frequent', () async {

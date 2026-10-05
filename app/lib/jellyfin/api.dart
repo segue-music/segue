@@ -74,11 +74,13 @@ class JellyfinApi implements MediaServer {
   Auth get auth => Auth.jellyfin(token: credentials.token);
 
   @override
-  Future<List<Album>> albums({int size = 100, int offset = 0}) async => [
+  Future<List<Album>> albums({required AlbumOrder order, int size = 100, int offset = 0}) async => [
     for (final json in await _items({
       'IncludeItemTypes': 'MusicAlbum',
-      'SortBy': 'DateCreated,SortName',
-      'SortOrder': 'Descending',
+      ...switch (order) {
+        AlbumOrder.latest => {'SortBy': 'DateCreated,SortName', 'SortOrder': 'Descending'},
+        AlbumOrder.name => {'SortBy': 'SortName', 'SortOrder': 'Ascending'},
+      },
       'Limit': '$size',
       'StartIndex': '$offset',
     }))

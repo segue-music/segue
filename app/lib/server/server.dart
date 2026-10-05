@@ -26,6 +26,15 @@ class ServerError implements Exception {
   String toString() => message;
 }
 
+/// Orders the library's albums come in.
+enum AlbumOrder {
+  /// The latest added to the library first.
+  latest,
+
+  /// By name.
+  name,
+}
+
 /// The media server, through the API it speaks: `SubsonicApi` or `JellyfinApi`.
 abstract interface class MediaServer {
   /// Also the API of the ids the hub gives this device (SPEC.md, section 8).
@@ -36,8 +45,8 @@ abstract interface class MediaServer {
   /// The same credentials, for the hub's hello (SPEC.md, section 2).
   Auth get auth;
 
-  /// Albums, the latest added to the library first.
-  Future<List<Album>> albums({int size = 100, int offset = 0});
+  /// Albums, in [order].
+  Future<List<Album>> albums({required AlbumOrder order, int size = 100, int offset = 0});
 
   /// The albums the user plays most, the most played first; none before anything has played.
   Future<List<Album>> mostPlayedAlbums({int size = 20});
