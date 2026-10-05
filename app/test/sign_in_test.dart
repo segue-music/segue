@@ -65,6 +65,17 @@ void main() {
         throwsA(isA<ServerError>().having((e) => e.isAuth, 'isAuth', isFalse)),
       );
     });
+
+    test('a server that can\'t be reached is asked only once', () async {
+      // Like a timeout, which a second question to the same address would only wait for again.
+      final asked = <String>[];
+      final down = MockClient((request) async {
+        asked.add(request.url.path);
+        throw http.ClientException('Connection timed out');
+      });
+      await expectLater(detectApi(Uri.parse('https://music.test'), client: down), throwsA(isA<http.ClientException>()));
+      expect(asked, ['/rest/ping.view']);
+    });
   });
 
   group('signIn', () {

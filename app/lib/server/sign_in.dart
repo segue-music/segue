@@ -22,31 +22,23 @@ class NotAMediaServer implements Exception {
 /// if it answers a ping (with an error, having no credentials), or else Jellyfin if it answers with
 /// its public info. Navidrome, which has both, answers as Subsonic at its address and as Jellyfin
 /// under /jellyfin. Throws [NotAMediaServer] when it answers as neither, and the failure itself
-/// when it can't be asked.
+/// when it can't be asked. A ping that fails throws right away: Jellyfin is at the same address, so
+/// asking it would only fail again, after another timeout.
 Future<Api> detectApi(Uri server, {http.Client? client}) async {
   final http_ = client ?? http.Client();
   final base = server.path.endsWith('/') ? server : server.replace(path: '${server.path}/');
-  Object? failure;
-  Future<Object?> probe(Uri url) async {
-    try {
-      return await _json(http_, url);
-    } on Exception catch (e) {
-      failure ??= e;
-      return null;
-    }
-  }
-
   try {
-    final ping = await probe(
+    final ping = await _json(
+      http_,
       base.resolve('rest/ping.view').replace(queryParameters: {'v': '1.16.1', 'c': clientName, 'f': 'json'}),
     );
     if (ping is Map && ping['subsonic-response'] is Map) return Api.subsonic;
-    final info = await probe(base.resolve('System/Info/Public'));
+    final info = await _json(http_, base.resolve('System/Info/Public'));
     if (info is Map && info['Id'] is String) return Api.jellyfin;
   } finally {
     if (client == null) http_.close();
   }
-  throw failure ?? NotAMediaServer(server);
+  throw NotAMediaServer(server);
 }
 
 /// An endpoint's JSON, or null when it isn't there (HTTP 4xx, or an answer that isn't JSON, like a
