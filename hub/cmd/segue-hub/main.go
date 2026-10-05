@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mateusguilherme/segue/hub"
+	"github.com/segue-music/segue/hub"
 )
 
 func main() {

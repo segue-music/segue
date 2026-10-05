@@ -13,7 +13,7 @@ plus its reference hub:
 - `hub/`: the reference hub in Go (package `hub`, usable as a library; binary in `cmd/segue-hub`).
 
 The first real client, a Spotify-like Flutter player for Navidrome and Jellyfin, is in another
-repository, `github.com/mateusguilherme/segue-app`, usually cloned next to this one as
+repository, `github.com/segue-music/segue-app`, usually cloned next to this one as
 `../segue-app`. Its side of the protocol is in its `lib/segue/`, so a protocol change is a commit
 in each repository. It lived here in `app/` until 2026-10-05, and took its history along.
 

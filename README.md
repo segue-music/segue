@@ -14,7 +14,7 @@
 <p align="center">
   <a href="SPEC.md">Protocol</a> ·
   <a href="#hub">Hub</a> ·
-  <a href="https://github.com/mateusguilherme/segue-app">App</a> ·
+  <a href="https://github.com/segue-music/segue-app">App</a> ·
   <a href="#next-steps">Next steps</a>
 </p>
 
@@ -31,7 +31,7 @@ each player, and routes commands. Audio still comes from the media server. The p
 and the messages are in [SPEC.md](SPEC.md).
 
 **Status: skeleton.** The protocol is a first draft. The hub works in its tests and with the
-first client, an app of its own ([segue-app](https://github.com/mateusguilherme/segue-app)); both
+first client, an app of its own ([segue-app](https://github.com/segue-music/segue-app)); both
 have run next to a real Navidrome since 2026-10-03.
 
 ## Layout
@@ -47,7 +47,7 @@ one static binary: an 11 MB image, using about 2 MB of RAM when idle.
 
 The app, a Spotify-like player for Navidrome, other OpenSubsonic servers and Jellyfin in Flutter
 (Linux, Windows, macOS, Android, iOS), is in its own repository,
-[mateusguilherme/segue-app](https://github.com/mateusguilherme/segue-app), with its side of the
+[segue-music/segue-app](https://github.com/segue-music/segue-app), with its side of the
 protocol in Dart (`lib/segue/`). It lived here, in `app/`, until 2026-10-05. A client in another
 language follows `SPEC.md`. A reference client in TypeScript, for apps like Feishin and Jellify,
 lived in `client/` until 2026-10-03: `git checkout c22dc7b -- client` brings it back.
@@ -85,7 +85,7 @@ listens on `0.0.0.0:8480`.
 ## Next steps
 
 1. The app: playlists, editing the queue (play next, add to it), and trying the iOS build on an
-   iPhone and in a car (see [segue-app](https://github.com/mateusguilherme/segue-app)).
+   iPhone and in a car (see [segue-app](https://github.com/segue-music/segue-app)).
 2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`, leaving out what
    the hub reports itself), as devices that can be seen but not commanded. That covers apps like
    Symfonium, which is closed source.

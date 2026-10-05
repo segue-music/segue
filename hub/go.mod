@@ -1,4 +1,4 @@
-module github.com/mateusguilherme/segue/hub
+module github.com/segue-music/segue/hub
 
 go 1.27
 

@@ -2,7 +2,7 @@
 
 Status: **draft 0**, 2026-10-03. Not proposed anywhere yet. This repository has a reference hub
 (`hub/`, Go), and the first client is an app in Flutter
-([segue-app](https://github.com/mateusguilherme/segue-app)). Where this text and their protocol
+([segue-app](https://github.com/segue-music/segue-app)). Where this text and their protocol
 code disagree, that is a bug in one of them.
 
 ## The problem
