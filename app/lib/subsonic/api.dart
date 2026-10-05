@@ -57,6 +57,9 @@ class SubsonicApi implements MediaServer {
   }
 
   @override
+  Future<List<Album>> mostPlayedAlbums({int size = 20}) => albums(type: 'frequent', size: size);
+
+  @override
   Future<(Album, List<Song>)> album(String id) async {
     final json = (await _get('getAlbum', {'id': id}))['album'] as Map<String, dynamic>;
     final songs = json['song'] as List? ?? const [];

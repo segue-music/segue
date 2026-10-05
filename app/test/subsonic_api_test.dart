@@ -92,6 +92,30 @@ void main() {
     expect(songs.single.toQueueItem().durationMs, 268000);
   });
 
+  test('the most played albums are getAlbumList2\'s frequent', () async {
+    late Uri asked;
+    final api = SubsonicApi(
+      Uri.parse('https://music.test'),
+      credentials,
+      client: MockClient((request) async {
+        asked = request.url;
+        return subsonic({
+          'status': 'ok',
+          'albumList2': {
+            'album': [
+              {'id': 'a2', 'name': 'Pump', 'artist': 'Aerosmith', 'year': 1989},
+            ],
+          },
+        });
+      }),
+    );
+    final albums = await api.mostPlayedAlbums(size: 12);
+    expect(asked.path, '/rest/getAlbumList2.view');
+    expect(asked.queryParameters, containsPair('type', 'frequent'));
+    expect(asked.queryParameters, containsPair('size', '12'));
+    expect(albums.single.name, 'Pump');
+  });
+
   test('search asks for artists, albums and songs', () async {
     late Uri asked;
     final api = SubsonicApi(

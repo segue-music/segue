@@ -117,7 +117,7 @@ void main() {
     await pumpHome(tester, const Size(1000, 700));
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
-    expect(title('Álbuns'), findsOneWidget);
+    expect(title('Início'), findsOneWidget);
 
     await tester.tap(find.descendant(of: find.byType(NavigationRail), matching: find.text('Artistas')));
     await tester.pumpAndSettle();

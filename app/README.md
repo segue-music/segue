@@ -13,10 +13,14 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   `ND_JELLYFIN_ENABLED=true`). The password isn't kept: the system's secure storage gets a Subsonic
   token, or Jellyfin's access token, which signing out ends on a Jellyfin server (Navidrome's keeps
   it until the password changes);
-- albums (newest first) and artists (by name, each with their albums), in a side rail or, on a
-  phone, a bar at the bottom; the album page; search (artists, albums and songs); and playback
-  through media_kit (libmpv), with a seek bar, shuffle and repeat (the queue or the track), in the
-  player bar and in a full-screen player that the song in the bar opens;
+- a home, where the app opens, with a row of the albums the user plays most and one of the latest
+  added to the library, 20 each, with arrows in each row's corner to go a screenful forward and
+  back (on a Jellyfin server, which counts plays only by song, an album's plays are its songs',
+  added up); albums (the latest added first) and artists (by name, each with their albums); all
+  three in a side rail or, on a phone, a bar at the bottom; the album page; search (artists, albums
+  and songs); and playback through media_kit (libmpv), with a seek bar, shuffle and repeat (the
+  queue or the track), in the player bar and in a full-screen player that the song in the bar
+  opens;
 - the queue of whichever device the app controls, from the full-screen player or, on a wide
   screen, the player bar: the current track on top, the next ones under it and what played before
   above it. A tap on a track plays it there;
@@ -55,7 +59,7 @@ has been tried on a tablet and on an Android TV; the iOS build has not been trie
 | `lib/segue/` | The Segue protocol in Dart, the hub client (reconnects by itself) and hub discovery |
 | `lib/player/` | `PlayerController` (queue, commands, state reports) over an `AudioEngine`; `MediaKitEngine` is the real one. `MediaControls`: the system's media controls. `AudioInterruptions`: calls and the like pausing the music, on iOS |
 | `lib/connect/` | `ConnectController`: which device the app controls, and moving the music between devices |
-| `lib/ui/` | The pages: sign-in, albums, artists, album, artist, search, player bar and full-screen player, queue, device picker |
+| `lib/ui/` | The pages: sign-in, home, albums, artists, album, artist, search, player bar and full-screen player, queue, device picker |
 | `test/` | Unit and widget tests, and tests against the real Go hub (`hub_test.dart`) |
 | `tool/` | A Docker image and script to build and test without installing Flutter; `icons.dart` makes every icon from the artwork, `icon.png` |
 

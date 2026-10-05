@@ -85,6 +85,35 @@ class JellyfinApi implements MediaServer {
       _album(json),
   ];
 
+  /// Jellyfin counts plays only by song: an album's are those of its songs, added up, among the user's
+  /// most played songs. A tie goes to the album with the more played song.
+  @override
+  Future<List<Album>> mostPlayedAlbums({int size = 20}) async {
+    final songs = await _items({
+      'IncludeItemTypes': 'Audio',
+      'Filters': 'IsPlayed',
+      'SortBy': 'PlayCount',
+      'SortOrder': 'Descending',
+      'Limit': '1000',
+    });
+    final plays = <String, int>{};
+    for (final song in songs) {
+      final album = song['AlbumId'] as String?;
+      final count = ((song['UserData'] as Map<String, dynamic>?)?['PlayCount'] as num?)?.toInt() ?? 0;
+      if (album != null) plays[album] = (plays[album] ?? 0) + count;
+    }
+    final ranked = [
+      for (final (i, MapEntry(key: id, value: count)) in plays.entries.indexed) (id: id, count: count, i: i),
+    ]..sort((a, b) => a.count != b.count ? b.count.compareTo(a.count) : a.i.compareTo(b.i));
+    final ids = [for (final album in ranked.take(size)) album.id];
+    if (ids.isEmpty) return const [];
+    // Asked by id, they come in whatever order.
+    final albums = {
+      for (final json in await _items({'Ids': ids.join(',')})) json['Id'] as String: _album(json),
+    };
+    return [for (final id in ids) ?albums[id]];
+  }
+
   @override
   Future<(Album, List<Song>)> album(String id) async {
     // Future.wait throws the first failure as it came, where a record's wait would wrap it.

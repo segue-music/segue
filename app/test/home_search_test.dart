@@ -30,6 +30,8 @@ Future<(PlayerController, List<String?>)> pumpHome(WidgetTester tester, Size siz
     credentials,
     client: MockClient((request) async {
       if (request.url.path.endsWith('getAlbumList2.view')) {
+        // Only among the latest: nothing has played yet.
+        if (request.url.queryParameters['type'] != 'newest') return subsonic({'albumList2': <String, Object?>{}});
         return subsonic({
           'albumList2': {
             'album': [
@@ -76,14 +78,14 @@ Future<(PlayerController, List<String?>)> pumpHome(WidgetTester tester, Size siz
 }
 
 void main() {
-  testWidgets('on a phone-sized screen, the bar searches once typing stops, in place of the albums', (tester) async {
+  testWidgets('on a phone-sized screen, the bar searches once typing stops, in place of the home', (tester) async {
     final (player, queries) = await pumpHome(tester, const Size(360, 640));
     expect(find.text('Toys in the Attic'), findsOneWidget);
     expect(find.byTooltip('Limpar'), findsNothing);
     // The bar has a line of its own, under the title.
     expect(
       tester.getCenter(find.byType(TextField)).dy,
-      greaterThan(tester.getBottomLeft(find.descendant(of: find.byType(AppBar), matching: find.text('Álbuns'))).dy),
+      greaterThan(tester.getBottomLeft(find.descendant(of: find.byType(AppBar), matching: find.text('Início'))).dy),
     );
 
     await tester.enterText(find.byType(TextField), 'dre');
@@ -113,7 +115,7 @@ void main() {
 
   testWidgets('on a wide screen, the bar sits next to the title', (tester) async {
     await pumpHome(tester, const Size(1000, 640));
-    final title = tester.getRect(find.descendant(of: find.byType(AppBar), matching: find.text('Álbuns')));
+    final title = tester.getRect(find.descendant(of: find.byType(AppBar), matching: find.text('Início')));
     final field = tester.getRect(find.byType(TextField));
     expect(field.left, greaterThan(title.right));
     expect(field.center.dy, moreOrLessEquals(title.center.dy, epsilon: 4));

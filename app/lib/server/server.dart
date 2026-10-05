@@ -36,8 +36,11 @@ abstract interface class MediaServer {
   /// The same credentials, for the hub's hello (SPEC.md, section 2).
   Auth get auth;
 
-  /// Albums, newest first.
+  /// Albums, the latest added to the library first.
   Future<List<Album>> albums({int size = 100, int offset = 0});
+
+  /// The albums the user plays most, the most played first; none before anything has played.
+  Future<List<Album>> mostPlayedAlbums({int size = 20});
 
   /// An album and its songs, in order.
   Future<(Album, List<Song>)> album(String id);

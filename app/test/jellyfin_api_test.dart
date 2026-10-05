@@ -85,6 +85,47 @@ void main() {
     expect(first.coverArt, 'a1');
   });
 
+  test('most played albums: Jellyfin counts plays by song, so they add up by album', () async {
+    Map<String, Object?> played(String id, String? albumId, int plays) => {
+      ...song,
+      'Id': id,
+      'AlbumId': albumId,
+      'UserData': {'PlayCount': plays, 'Played': true},
+    };
+    final asked = <http.Request>[];
+    final albums = await jellyfin((request) {
+      final query = request.url.queryParameters;
+      if (query['IncludeItemTypes'] == 'Audio') {
+        return items([
+          played('s0', null, 20), // a song in no album
+          played('s1', 'a1', 9),
+          played('s2', 'a2', 6),
+          played('s3', 'a2', 5),
+          played('s4', 'a3', 1),
+        ]);
+      }
+      // Asked by id, in whatever order the server likes.
+      final ids = query['Ids']?.split(',') ?? const [];
+      return items([
+        for (final id in ids.reversed) {...album, 'Id': id, 'Name': 'Album $id'},
+      ]);
+    }, asked).mostPlayedAlbums(size: 2);
+    expect([for (final album in albums) album.name], ['Album a2', 'Album a1']);
+    final songs = asked.first.url.queryParameters;
+    expect(songs, containsPair('Recursive', 'true'));
+    expect(songs, containsPair('Filters', 'IsPlayed'));
+    expect(songs, containsPair('SortBy', 'PlayCount'));
+    expect(songs, containsPair('SortOrder', 'Descending'));
+    expect(songs, contains('Limit'));
+    expect(asked.last.url.queryParameters, containsPair('Ids', 'a2,a1'));
+  });
+
+  test('with nothing played yet there are no most played albums, and no albums to ask for', () async {
+    final asked = <http.Request>[];
+    expect(await jellyfin((_) => items([]), asked).mostPlayedAlbums(), isEmpty);
+    expect(asked, hasLength(1));
+  });
+
   test('an album and its songs, in order; a song without an image of its own shows its album\'s', () async {
     final asked = <http.Request>[];
     final (found, songs) = await jellyfin((request) {

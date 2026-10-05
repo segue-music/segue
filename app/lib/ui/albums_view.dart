@@ -66,19 +66,21 @@ class AlbumGrid extends StatelessWidget {
             childAspectRatio: 0.75,
           ),
           itemCount: albums.length,
-          itemBuilder: (context, i) =>
-              _AlbumTile(albums[i], subtitle: subtitle?.call(albums[i]) ?? albums[i].artist ?? ''),
+          itemBuilder: (context, i) => AlbumTile(albums[i], subtitle: subtitle?.call(albums[i])),
         ),
       ),
     ],
   );
 }
 
-class _AlbumTile extends StatelessWidget {
-  const _AlbumTile(this.album, {required this.subtitle});
+/// An album's cover, with its name and a line under it. It opens the album's page.
+class AlbumTile extends StatelessWidget {
+  const AlbumTile(this.album, {this.subtitle, super.key});
 
   final Album album;
-  final String subtitle;
+
+  /// The line under the name; the artist, by default.
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +98,7 @@ class _AlbumTile extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(album.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.titleSmall),
-            Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodySmall),
+            Text(subtitle ?? album.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodySmall),
           ],
         ),
       ),

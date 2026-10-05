@@ -9,6 +9,7 @@ import '../services.dart';
 import 'albums_view.dart';
 import 'artists_view.dart';
 import 'devices_sheet.dart';
+import 'home_view.dart';
 import 'now_playing_bar.dart';
 import 'search_results.dart';
 
@@ -27,6 +28,7 @@ class HomePage extends StatefulWidget {
 
 /// The library's sections, in the side rail (or, on a phone, the bar at the bottom).
 enum _Section {
+  home('Início', Icons.home_outlined, Icons.home),
   albums('Álbuns', Icons.album_outlined, Icons.album),
   artists('Artistas', Icons.person_outline, Icons.person);
 
@@ -45,10 +47,10 @@ class _HomePageState extends State<HomePage> {
   /// What the search bar found; null shows the section.
   Future<SearchResults>? _results;
 
-  _Section _section = _Section.albums;
+  _Section _section = _Section.home;
 
   /// The sections opened so far: each loads the first time it is opened.
-  final _opened = {_Section.albums};
+  final _opened = {_Section.home};
 
   void _select(int index) {
     final section = _Section.values[index];
@@ -120,6 +122,7 @@ class _HomePageState extends State<HomePage> {
             key: ValueKey(section),
             offstage: results != null || section != _section,
             child: switch (section) {
+              _Section.home => const HomeView(),
               _Section.albums => const AlbumsView(),
               _Section.artists => const ArtistsView(),
             },
