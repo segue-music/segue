@@ -6,11 +6,13 @@ import 'focus_ring.dart';
 import 'player_controls.dart';
 import 'player_page.dart';
 import 'queue_page.dart';
+import 'song_link.dart';
 
 export 'player_controls.dart' show formatDuration;
 
 /// What plays, wherever it plays, with the controls and the device picker. The song opens the
-/// full-screen player.
+/// full-screen player, but for its title and artist on a wide screen, which open its album and
+/// artist.
 class NowPlayingBar extends StatelessWidget {
   const NowPlayingBar({super.key});
 
@@ -58,17 +60,26 @@ class NowPlayingBar extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(width: 12),
+                                    // On a phone the song is all there is to tap for the player: its title and
+                                    // artist link only on a wider screen, as the full-screen player's do. They
+                                    // take no focus: for the keyboard and the remote the song is one stop, the
+                                    // player's, where they link too.
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            now.title ?? 'Nada tocando',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          Text(now.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
-                                        ],
+                                        children: wide
+                                            ? [
+                                                ExcludeFocus(child: SongLink.title(now)),
+                                                ExcludeFocus(child: SongLink.artist(now)),
+                                              ]
+                                            : [
+                                                Text(
+                                                  now.title ?? 'Nada tocando',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                Text(now.artist ?? '', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                              ],
                                       ),
                                     ),
                                   ],

@@ -140,6 +140,9 @@ class JellyfinApi implements MediaServer {
   }
 
   @override
+  Future<Song> song(String id) async => _song(_only(await _items({'Ids': id}), id));
+
+  @override
   Future<SearchResults> search(String query, {int artists = 5, int albums = 10, int songs = 50}) async {
     final [foundArtists, foundAlbums, foundSongs] = await Future.wait([
       _albumArtists({'searchTerm': query, 'Limit': '$artists'}),
@@ -263,6 +266,10 @@ String? _primaryImage(Map<String, dynamic> json) =>
 
 String? _joined(Object? names) => names is List && names.isNotEmpty ? names.join(', ') : null;
 
+/// The id of the first of a list of names with ids, as ArtistItems and AlbumArtists are.
+String? _firstId(Object? items) =>
+    items is List && items.isNotEmpty ? (items.first as Map<String, dynamic>)['Id'] as String? : null;
+
 Duration? _duration(Map<String, dynamic> json) {
   final ticks = json['RunTimeTicks'] as num?; // 10 million to the second
   return ticks == null ? null : Duration(microseconds: ticks.toInt() ~/ 10);
@@ -277,7 +284,8 @@ Album _album(Map<String, dynamic> json) => Album(
   songCount: (json['ChildCount'] as num?)?.toInt(),
 );
 
-/// A song's cover is its own image or else its album's, as Jellyfin's apps show it.
+/// A song's cover is its own image or else its album's, as Jellyfin's apps show it. Its artists are
+/// the album's when it has none of its own, and its artist id is the first of those it shows.
 Song _song(Map<String, dynamic> json) => Song(
   id: json['Id'] as String,
   title: json['Name'] as String? ?? '',
@@ -285,6 +293,8 @@ Song _song(Map<String, dynamic> json) => Song(
   album: json['Album'] as String?,
   coverArt: _primaryImage(json) ?? (json['AlbumPrimaryImageTag'] == null ? null : json['AlbumId'] as String?),
   duration: _duration(json),
+  albumId: json['AlbumId'] as String?,
+  artistId: _firstId(json['ArtistItems']) ?? _firstId(json['AlbumArtists']),
 );
 
 Artist _artist(Map<String, dynamic> json) => Artist(

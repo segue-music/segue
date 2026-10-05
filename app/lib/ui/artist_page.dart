@@ -31,7 +31,14 @@ class _ArtistPageState extends State<ArtistPage> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.artist.name)),
+      // Opened from a song, the name it comes with is the song's artists ("A, B") until the artist's own
+      // arrives.
+      appBar: AppBar(
+        title: FutureBuilder(
+          future: _artist,
+          builder: (context, snapshot) => Text(snapshot.data?.$1.name ?? widget.artist.name),
+        ),
+      ),
       body: FutureBuilder(
         future: _artist,
         builder: (context, snapshot) {

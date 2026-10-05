@@ -8,6 +8,7 @@ import 'cover.dart';
 import 'devices_sheet.dart';
 import 'player_controls.dart';
 import 'queue_page.dart';
+import 'song_link.dart';
 
 /// The full-screen player: what plays, wherever it plays, big, with every control.
 class PlayerPage extends StatelessWidget {
@@ -100,25 +101,10 @@ class _Player extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text(
-                    now.title ?? 'Nada tocando',
-                    style: text.headlineSmall,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    now.artist ?? '',
-                    style: text.titleMedium?.copyWith(color: muted),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (now.album case final album?)
-                    Text(
-                      album,
-                      style: text.bodyMedium?.copyWith(color: muted),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  SongLink.title(now, style: text.headlineSmall, maxLines: 2, replace: true),
+                  SongLink.artist(now, style: text.titleMedium?.copyWith(color: muted), replace: true),
+                  if (now.album != null)
+                    SongLink.album(now, style: text.bodyMedium?.copyWith(color: muted), replace: true),
                   const SizedBox(height: 12),
                   SeekSlider(now, timesBelow: true),
                   const SizedBox(height: 8),

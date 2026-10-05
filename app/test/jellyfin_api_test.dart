@@ -40,7 +40,13 @@ const song = {
   'Name': 'Walk This Way',
   'Type': 'Audio',
   'Artists': ['Aerosmith'],
+  'ArtistItems': [
+    {'Name': 'Aerosmith', 'Id': 'ar1'},
+  ],
   'AlbumArtist': 'Aerosmith',
+  'AlbumArtists': [
+    {'Name': 'Aerosmith', 'Id': 'ar1'},
+  ],
   'Album': 'Toys in the Attic',
   'AlbumId': 'a1',
   'AlbumPrimaryImageTag': 'tag',
@@ -166,6 +172,30 @@ void main() {
     );
     expect(first.duration, const Duration(seconds: 221));
     expect(first.coverArt, 'a1');
+  });
+
+  test('a song comes with the ids of its album and its first artist, or its album artist\'s', () async {
+    final duet = {
+      ...song,
+      'Artists': ['Run-DMC', 'Aerosmith'],
+      'ArtistItems': [
+        {'Name': 'Run-DMC', 'Id': 'ar2'},
+        {'Name': 'Aerosmith', 'Id': 'ar1'},
+      ],
+    };
+    final untagged = {...song, 'Artists': <String>[], 'ArtistItems': <Object>[]};
+    final api = jellyfin(
+      (request) => switch (request.url.queryParameters['Ids']) {
+        's1' => items([duet]),
+        's2' => items([untagged]),
+        _ => items([]),
+      },
+    );
+    final found = await api.song('s1');
+    expect((found.title, found.artist), ('Walk This Way', 'Run-DMC, Aerosmith'));
+    expect((found.albumId, found.artistId), ('a1', 'ar2'));
+    expect((await api.song('s2')).artistId, 'ar1', reason: 'its artist shows as the album artist');
+    await expectLater(api.song('s3'), throwsA(isA<ServerError>()));
   });
 
   test('search: artists, albums and songs that match', () async {

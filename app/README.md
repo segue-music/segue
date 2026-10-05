@@ -20,7 +20,9 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   name, each with their albums); all three in a side rail or, on a phone, a bar at the bottom; the
   album page; search (artists, albums and songs); and playback through media_kit (libmpv), with a
   seek bar, shuffle and repeat (the queue or the track), in the player bar and in a full-screen
-  player that the song in the bar opens;
+  player that the song in the bar opens. In both, the song's title opens its album (as does the
+  album's name, in the full-screen player) and its artist their page (the first artist, when it has
+  several), whichever device it plays on; on a phone the whole song in the bar opens the player;
 - the queue of whichever device the app controls, from the full-screen player or, on a wide
   screen, the player bar: the current track on top, the next ones under it and what played before
   above it. A tap on a track plays it there;

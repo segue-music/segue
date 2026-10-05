@@ -54,6 +54,9 @@ abstract interface class MediaServer {
   /// An album and its songs, in order.
   Future<(Album, List<Song>)> album(String id);
 
+  /// A song, with its album's and its artist's ids.
+  Future<Song> song(String id);
+
   /// Artists, albums and songs whose name, title or artist matches [query].
   Future<SearchResults> search(String query, {int artists = 5, int albums = 10, int songs = 50});
 

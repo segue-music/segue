@@ -93,6 +93,32 @@ void main() {
     expect(songs.single.toQueueItem().durationMs, 268000);
   });
 
+  test('a song comes with the ids of its album and its artist (getSong)', () async {
+    late Uri asked;
+    final api = SubsonicApi(
+      Uri.parse('https://music.test'),
+      credentials,
+      client: MockClient((request) async {
+        asked = request.url;
+        return subsonic({
+          'status': 'ok',
+          'song': {
+            'id': 's1',
+            'title': 'Dream On',
+            'artist': 'Aerosmith',
+            'album': 'Aerosmith',
+            'albumId': 'a1',
+            'artistId': 'ar1',
+          },
+        });
+      }),
+    );
+    final song = await api.song('s1');
+    expect(asked.path, '/rest/getSong.view');
+    expect(asked.queryParameters, containsPair('id', 's1'));
+    expect((song.title, song.albumId, song.artistId), ('Dream On', 'a1', 'ar1'));
+  });
+
   test('albums by name are getAlbumList2\'s alphabeticalByName, and the latest added its newest', () async {
     final asked = <Uri>[];
     final api = SubsonicApi(

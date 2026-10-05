@@ -14,7 +14,16 @@ class Album {
 }
 
 class Song {
-  const Song({required this.id, required this.title, this.artist, this.album, this.coverArt, this.duration});
+  const Song({
+    required this.id,
+    required this.title,
+    this.artist,
+    this.album,
+    this.coverArt,
+    this.duration,
+    this.albumId,
+    this.artistId,
+  });
 
   /// A song another device sent, by its id in this device's API. The cover goes by the song id:
   /// Navidrome takes a raw entity id for getCoverArt (parseArtworkID in core/artwork/artwork.go), and
@@ -35,6 +44,12 @@ class Song {
   final String? album;
   final String? coverArt;
   final Duration? duration;
+
+  /// Its album's id; null for a song another device sent, whose queue item doesn't carry it.
+  final String? albumId;
+
+  /// The id of its first artist, the one its [artist] starts with; null as [albumId] is.
+  final String? artistId;
 
   QueueItem toQueueItem() =>
       QueueItem(id: id, title: title, artist: artist, album: album, durationMs: duration?.inMilliseconds);

@@ -76,6 +76,10 @@ class SubsonicApi implements MediaServer {
     return (_album(json), [for (final song in songs) _song(song as Map<String, dynamic>)]);
   }
 
+  /// A song (getSong).
+  @override
+  Future<Song> song(String id) async => _song((await _get('getSong', {'id': id}))['song'] as Map<String, dynamic>);
+
   /// Artists, albums and songs whose name, title or artist matches [query] (search3).
   @override
   Future<SearchResults> search(String query, {int artists = 5, int albums = 10, int songs = 50}) async {
@@ -189,6 +193,8 @@ Song _song(Map<String, dynamic> json) => Song(
   album: json['album'] as String?,
   coverArt: json['coverArt'] as String?,
   duration: json['duration'] == null ? null : Duration(seconds: (json['duration'] as num).toInt()),
+  albumId: json['albumId'] as String?,
+  artistId: json['artistId'] as String?,
 );
 
 Artist _artist(Map<String, dynamic> json) => Artist(
