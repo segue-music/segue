@@ -29,7 +29,10 @@ class _HomeViewState extends State<HomeView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_loaded) _load();
+
+    if (!_loaded) {
+      _load();
+    }
   }
 
   void _load() {
@@ -108,10 +111,12 @@ class _AlbumRowState extends State<_AlbumRow> {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+
     Widget note(String message) => Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(message, style: text.bodyMedium),
     );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -130,15 +135,23 @@ class _AlbumRowState extends State<_AlbumRow> {
         FutureBuilder(
           future: widget.albums,
           builder: (context, snapshot) {
-            if (snapshot.hasError) return note('Não consegui listar os álbuns: ${snapshot.error}');
+            if (snapshot.hasError) {
+              return note('Não consegui listar os álbuns: ${snapshot.error}');
+            }
+
             final albums = snapshot.data;
+
             if (albums == null) {
               return const SizedBox(
                 height: _AlbumRow._height,
                 child: Center(child: Spinner()),
               );
             }
-            if (albums.isEmpty) return note(widget.empty);
+
+            if (albums.isEmpty) {
+              return note(widget.empty);
+            }
+
             // Also from a server that sends more than it was asked for.
             return SizedBox(height: _AlbumRow._height, child: _strip(albums.take(_limit).toList()));
           },
@@ -152,11 +165,16 @@ class _AlbumRowState extends State<_AlbumRow> {
   Widget _arrows() => ListenableBuilder(
     listenable: Listenable.merge([_scroll, _metrics]),
     builder: (context, _) {
-      if (!_scroll.hasClients) return const SizedBox.shrink();
+      if (!_scroll.hasClients) {
+        return const SizedBox.shrink();
+      }
+
       final position = _scroll.position;
+
       if (!position.hasContentDimensions || position.maxScrollExtent <= position.minScrollExtent) {
         return const SizedBox.shrink();
       }
+
       return ExcludeFocus(
         child: Row(
           mainAxisSize: MainAxisSize.min,

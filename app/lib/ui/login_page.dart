@@ -34,17 +34,22 @@ class _LoginPageState extends State<LoginPage> {
     for (final controller in [_server, _username, _password, _hub]) {
       controller.dispose();
     }
+
     super.dispose();
   }
 
   Future<void> _submit() async {
-    if (!_form.currentState!.validate()) return;
+    if (!_form.currentState!.validate()) {
+      return;
+    }
+
     setState(() {
       _busy = true;
       _error = null;
     });
     final server = normalizeServer(_server.text);
     MediaServer? api;
+
     try {
       final deviceId = await Session.thisDeviceId();
       final deviceName = await Session.thisDeviceName();
@@ -64,12 +69,14 @@ class _LoginPageState extends State<LoginPage> {
         deviceName: deviceName,
         hub: hub.isEmpty ? null : normalizeServer(hub),
       );
+
       try {
         await session.save();
       } on Exception catch (e) {
         setState(() => _error = 'Entrou, mas não consegui guardar o login no chaveiro do sistema: $e');
         return;
       }
+
       widget.onSignedIn(session);
     } on NotAMediaServer {
       setState(() => _error = 'Não achei um servidor Subsonic nem Jellyfin em ${server.host}.');
@@ -79,7 +86,10 @@ class _LoginPageState extends State<LoginPage> {
       setState(() => _error = 'Não consegui falar com ${server.host}: $e');
     } finally {
       api?.close();
-      if (mounted) setState(() => _busy = false);
+
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 

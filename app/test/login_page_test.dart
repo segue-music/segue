@@ -49,6 +49,7 @@ void main() {
 
   testWidgets('the keyboard offers "next" from field to field, and from the password, signing in', (tester) async {
     await tester.pumpWidget(MaterialApp(home: LoginPage(onSignedIn: (_) {})));
+
     for (final (label, action) in [
       ('Servidor', 'TextInputAction.next'),
       ('Usuário', 'TextInputAction.next'),
@@ -58,6 +59,7 @@ void main() {
       await tester.pump();
       expect(tester.testTextInput.setClientArgs?['inputAction'], action, reason: label);
     }
+
     await tester.tap(find.widgetWithText(TextFormField, 'Servidor'));
     await tester.pump();
     await tester.testTextInput.receiveAction(TextInputAction.next);

@@ -38,7 +38,10 @@ class _SegueAppState extends State<SegueApp> {
   void initState() {
     super.initState();
     final session = widget.session;
-    if (session != null) _start(session);
+
+    if (session != null) {
+      _start(session);
+    }
   }
 
   Future<void> _start(Session session) async {
@@ -46,19 +49,26 @@ class _SegueAppState extends State<SegueApp> {
       _starting = true;
       _error = null;
     });
+
     try {
       final services = await Services.start(session);
+
       if (!mounted) {
         await services.dispose();
         return;
       }
+
       setState(() => _services = services);
       widget.mediaControls?.attach(services.connect, services.api);
       widget.interruptions?.attach(services.player);
     } on Exception catch (e) {
-      if (mounted) setState(() => _error = e);
+      if (mounted) {
+        setState(() => _error = e);
+      }
     } finally {
-      if (mounted) setState(() => _starting = false);
+      if (mounted) {
+        setState(() => _starting = false);
+      }
     }
   }
 
@@ -89,7 +99,11 @@ class _SegueAppState extends State<SegueApp> {
           enabled: widget.television,
           child: TextFieldArrowShortcuts(child: child!),
         );
-        if (services == null) return page;
+
+        if (services == null) {
+          return page;
+        }
+
         return ServicesScope(
           services: services,
           // The media keys, too, where no system media session takes them.

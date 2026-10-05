@@ -41,7 +41,11 @@ Future<PlayerController> pumpBar(
     client: MockClient((_) async => http.Response('', 404)),
   );
   final player = PlayerController(FakeEngine(), api);
-  if (client == null) await player.playQueue(songs, index: 1);
+
+  if (client == null) {
+    await player.playQueue(songs, index: 1);
+  }
+
   final connect = ConnectController(player: player, client: client);
   // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
   client?.notifyListeners(); // as when another device's state arrives
@@ -118,9 +122,11 @@ void main() {
     await openQueue(tester);
     expect(find.byType(QueuePage), findsOneWidget);
     expect(inQueue(find.text('Fila')), findsOneWidget);
+
     for (final title in ['Two', 'Three', 'Four']) {
       expect(inQueue(find.text(title)), findsOneWidget, reason: title);
     }
+
     expect(tile(tester, 'Two').selected, isTrue, reason: 'the current track stands out');
     expect(tile(tester, 'Three').selected, isFalse);
     expect(inQueue(find.byIcon(Icons.graphic_eq)), findsOneWidget, reason: 'it plays');

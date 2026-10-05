@@ -10,15 +10,22 @@ import 'protocol.dart';
 Future<Uri?> discoverHub(Uri server, {Uri? hub, http.Client? client}) async {
   final candidates = hub != null ? [hub] : [server, if (server.path.length > 1) server.replace(path: '/')];
   final http_ = client ?? http.Client();
+
   try {
     for (final base in candidates) {
       // The hub answers under /connect/ whether or not a proxy strips it, so this works both for
       // the media server's origin and for the hub's own address.
       final root = base.path.endsWith('/') ? base : base.replace(path: '${base.path}/');
+
       try {
         final response = await http_.get(root.resolve('connect/v1/info')).timeout(const Duration(seconds: 3));
-        if (response.statusCode != 200) continue;
+
+        if (response.statusCode != 200) {
+          continue;
+        }
+
         final info = jsonDecode(response.body);
+
         if (info is Map &&
             info['protocol'] == 'segue' &&
             (info['versions'] as List?)?.contains(protocolVersion) == true) {
@@ -29,8 +36,11 @@ Future<Uri?> discoverHub(Uri server, {Uri? hub, http.Client? client}) async {
         continue; // not reachable, not JSON, or not a hub
       }
     }
+
     return null;
   } finally {
-    if (client == null) http_.close();
+    if (client == null) {
+      http_.close();
+    }
   }
 }

@@ -30,6 +30,7 @@ class PlayerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     void close() => Navigator.of(context).maybePop();
+
     return CallbackShortcuts(
       bindings: {const SingleActivator(LogicalKeyboardKey.escape): close},
       child: Focus(

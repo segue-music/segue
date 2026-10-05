@@ -40,6 +40,7 @@ class _AlbumsViewState extends State<AlbumsView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
     if (!_started) {
       _started = true;
       scheduleMicrotask(_load); // out of the build
@@ -48,24 +49,38 @@ class _AlbumsViewState extends State<AlbumsView> {
 
   /// Asks for the next page; [over], for the first again, which replaces the albums when it comes.
   Future<void> _load({bool over = false}) async {
-    if (!mounted || (!over && (_loading || _done || _error != null))) return;
+    if (!mounted || (!over && (_loading || _done || _error != null))) {
+      return;
+    }
+
     final generation = over ? ++_generation : _generation;
     final api = ServicesScope.of(context).api;
     setState(() {
       _loading = true;
       _error = null;
     });
+
     try {
       final page = await api.albums(order: AlbumOrder.name, size: _pageSize, offset: over ? 0 : _albums.length);
-      if (!mounted || generation != _generation) return;
+
+      if (!mounted || generation != _generation) {
+        return;
+      }
+
       setState(() {
-        if (over) _albums.clear();
+        if (over) {
+          _albums.clear();
+        }
+
         _albums.addAll(page);
         _done = page.length < _pageSize;
         _loading = false;
       });
     } on Object catch (error) {
-      if (!mounted || generation != _generation) return;
+      if (!mounted || generation != _generation) {
+        return;
+      }
+
       setState(() {
         _error = error;
         _loading = false;
@@ -84,19 +99,28 @@ class _AlbumsViewState extends State<AlbumsView> {
       ScrollNotification(:final metrics) || ScrollMetricsNotification(:final metrics) => metrics,
       _ => null,
     };
+
     if (metrics != null && metrics.extentAfter < _ahead && !_loading && !_done && _error == null) {
       scheduleMicrotask(_load); // notifications can come during layout
     }
+
     return false;
   }
 
   @override
   Widget build(BuildContext context) {
     final error = _error;
+
     if (_albums.isEmpty) {
-      if (error != null) return Center(child: _Retry('Não consegui listar os álbuns: $error', onRetry: _retry));
-      if (!_done) return const Center(child: Spinner());
+      if (error != null) {
+        return Center(child: _Retry('Não consegui listar os álbuns: $error', onRetry: _retry));
+      }
+
+      if (!_done) {
+        return const Center(child: Spinner());
+      }
     }
+
     return NotificationListener<Notification>(
       onNotification: _scrolled,
       child: RefreshIndicator(

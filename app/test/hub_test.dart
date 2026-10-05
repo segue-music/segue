@@ -67,8 +67,12 @@ class App {
 
 Future<void> until(bool Function() condition, String what) async {
   final deadline = DateTime.now().add(const Duration(seconds: 2));
+
   while (!condition()) {
-    if (DateTime.now().isAfter(deadline)) fail('timed out waiting for $what');
+    if (DateTime.now().isAfter(deadline)) {
+      fail('timed out waiting for $what');
+    }
+
     await Future<void>.delayed(const Duration(milliseconds: 5));
   }
 }
@@ -79,7 +83,10 @@ void main() {
     final listening = Completer<Uri>();
     hub.stdout.transform(utf8.decoder).transform(const LineSplitter()).listen((line) {
       final match = RegExp(r'msg="hub listening" url=http://(\S+)').firstMatch(line);
-      if (match != null && !listening.isCompleted) listening.complete(Uri.parse('ws://${match[1]}/v1/ws'));
+
+      if (match != null && !listening.isCompleted) {
+        listening.complete(Uri.parse('ws://${match[1]}/v1/ws'));
+      }
     });
     unawaited(hub.stderr.drain<void>());
     hubUrl = await listening.future.timeout(const Duration(seconds: 10));

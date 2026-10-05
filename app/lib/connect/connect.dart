@@ -58,7 +58,11 @@ class ConnectController extends ChangeNotifier {
   ConnectController({required this.player, this.client}) {
     player.addListener(_update);
     final hub = client;
-    if (hub == null) return;
+
+    if (hub == null) {
+      return;
+    }
+
     hub.addListener(_update);
     hub.onCommand = (command, from) => player.obey(command);
     hub.onConnected = () => unawaited(_connected());
@@ -96,9 +100,14 @@ class ConnectController extends ChangeNotifier {
 
   NowPlaying? get nowPlaying {
     final device = activeDevice;
+
     if (device == null) {
       final song = player.current;
-      if (song == null) return null;
+
+      if (song == null) {
+        return null;
+      }
+
       return NowPlaying(
         songId: song.id,
         title: song.title,
@@ -115,6 +124,7 @@ class ConnectController extends ChangeNotifier {
         canJump: true,
       );
     }
+
     final state = device.state;
     final item = state?.current;
     return NowPlaying(
@@ -139,7 +149,11 @@ class ConnectController extends ChangeNotifier {
   /// current track's place in it.
   ({List<QueueItem> tracks, int index}) get queue {
     final device = activeDevice;
-    if (device == null) return (tracks: [for (final song in player.queue) song.toQueueItem()], index: player.index);
+
+    if (device == null) {
+      return (tracks: [for (final song in player.queue) song.toQueueItem()], index: player.index);
+    }
+
     return (tracks: device.state?.queue ?? const [], index: device.state?.index ?? 0);
   }
 
@@ -171,13 +185,22 @@ class ConnectController extends ChangeNotifier {
   /// current one has any.
   Future<Result> switchTo(String? deviceId) async {
     final hub = client;
-    if (deviceId == _active || hub == null) return const Result(ok: true);
+
+    if (deviceId == _active || hub == null) {
+      return const Result(ok: true);
+    }
+
     final me = hub.device.id;
     final hasMusic = _active == null ? player.queue.isNotEmpty : (activeDevice?.state?.queue?.isNotEmpty ?? false);
+
     if (hasMusic) {
       final result = await hub.transfer(_active ?? me, deviceId ?? me);
-      if (!result.ok) return result;
+
+      if (!result.ok) {
+        return result;
+      }
     }
+
     _active = deviceId;
     notifyListeners();
     return const Result(ok: true);
@@ -185,7 +208,11 @@ class ConnectController extends ChangeNotifier {
 
   Future<Result> _run(Command command, Future<void> Function() here) async {
     final target = _active;
-    if (target != null) return client!.command(target, command);
+
+    if (target != null) {
+      return client!.command(target, command);
+    }
+
     try {
       await here();
       return const Result(ok: true);
@@ -199,6 +226,7 @@ class ConnectController extends ChangeNotifier {
       _restored = true;
       await _restoreLastPlayback();
     }
+
     client!.sendState(player.report(full: true));
   }
 
@@ -209,13 +237,21 @@ class ConnectController extends ChangeNotifier {
     final hub = client!;
     final last = hub.lastPlayback;
     final queue = last?.state.queue;
-    if (last == null || queue == null || queue.isEmpty) return;
-    if (_whoIsPlaying() != null || player.queue.isNotEmpty) return;
+
+    if (last == null || queue == null || queue.isEmpty) {
+      return;
+    }
+
+    if (_whoIsPlaying() != null || player.queue.isNotEmpty) {
+      return;
+    }
+
     if (last.deviceId != hub.device.id && (hub.devices[last.deviceId]?.online ?? false)) {
       _active = last.deviceId;
       notifyListeners();
       return;
     }
+
     try {
       await player.obey(
         Command.setQueue(queue: queue, index: last.state.index ?? 0, positionMs: last.state.positionMs, play: false),
@@ -227,13 +263,22 @@ class ConnectController extends ChangeNotifier {
 
   void _update() {
     final playing = _whoIsPlaying();
-    if (playing != null && playing != _playing) _active = playing == _here ? null : playing;
+
+    if (playing != null && playing != _playing) {
+      _active = playing == _here ? null : playing;
+    }
+
     _playing = playing;
     final active = activeDevice;
+
     if (_active != null && !(active?.online ?? false)) {
       _active = null; // gone or offline
-      if (active != null) unawaited(_keepHere(active));
+
+      if (active != null) {
+        unawaited(_keepHere(active));
+      }
     }
+
     notifyListeners();
   }
 
@@ -242,7 +287,11 @@ class ConnectController extends ChangeNotifier {
   Future<void> _keepHere(Device device) async {
     final state = device.state;
     final queue = state?.queue;
-    if (state == null || queue == null || queue.isEmpty) return;
+
+    if (state == null || queue == null || queue.isEmpty) {
+      return;
+    }
+
     try {
       await player.obey(
         Command.setQueue(
@@ -259,13 +308,24 @@ class ConnectController extends ChangeNotifier {
 
   /// This device if it plays; otherwise the other device that reported playing most recently.
   String? _whoIsPlaying() {
-    if (player.playing) return _here;
+    if (player.playing) {
+      return _here;
+    }
+
     Device? latest;
+
     for (final device in client?.devices.values ?? const <Device>[]) {
       final state = device.state;
-      if (!device.online || state?.status != PlaybackStatus.playing) continue;
-      if (latest == null || state!.at > latest.state!.at) latest = device;
+
+      if (!device.online || state?.status != PlaybackStatus.playing) {
+        continue;
+      }
+
+      if (latest == null || state!.at > latest.state!.at) {
+        latest = device;
+      }
     }
+
     return latest?.id;
   }
 

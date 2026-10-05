@@ -56,8 +56,12 @@ class MediaKitEngine implements AudioEngine {
       stream.playing.listen((_) => _changes.add(null)),
       stream.playlist.listen((playlist) {
         final inOrder = [for (final media in playlist.medias) media.uri];
+
         // Another track, by itself: from its start. A shuffle keeps the same one current.
-        if (_at(inOrder, playlist.index) != _at(_inOrder, _index)) _moved(Duration.zero);
+        if (_at(inOrder, playlist.index) != _at(_inOrder, _index)) {
+          _moved(Duration.zero);
+        }
+
         _inOrder = inOrder;
         _index = playlist.index;
         _changes.add(null);
@@ -67,10 +71,13 @@ class MediaKitEngine implements AudioEngine {
       stream.completed.listen((_) => _changes.add(null)),
       stream.position.listen((reported) {
         if (_moving) {
-          if ((reported - position).abs() < const Duration(seconds: 1)) _movedTo = null;
+          if ((reported - position).abs() < const Duration(seconds: 1)) {
+            _movedTo = null;
+          }
         } else if (reported < _lastPosition - const Duration(milliseconds: 500)) {
           _changes.add(null); // went back by itself: the track started over, repeating it
         }
+
         _lastPosition = reported;
       }),
     ];
@@ -122,7 +129,10 @@ class MediaKitEngine implements AudioEngine {
 
   @override
   Duration get position {
-    if (!_moving) return _player.state.position;
+    if (!_moving) {
+      return _player.state.position;
+    }
+
     final since = DateTime.now().difference(_movedAt);
     return playing ? _movedTo! + since : _movedTo!;
   }
@@ -133,15 +143,23 @@ class MediaKitEngine implements AudioEngine {
   @override
   List<int> get order {
     final unused = <String, List<int>>{};
+
     for (final (i, track) in _opened.indexed) {
       (unused[track] ??= []).add(i);
     }
+
     final order = <int>[];
+
     for (final track in _inOrder) {
       final positions = unused[track];
-      if (positions == null || positions.isEmpty) return [for (var i = 0; i < _opened.length; i++) i];
+
+      if (positions == null || positions.isEmpty) {
+        return [for (var i = 0; i < _opened.length; i++) i];
+      }
+
       order.add(positions.removeAt(0));
     }
+
     return order;
   }
 
@@ -169,7 +187,11 @@ class MediaKitEngine implements AudioEngine {
   Future<void> setShuffle(bool on) async {
     await _ready;
     _shuffle = on;
-    if (_opened.isNotEmpty) await _player.setShuffle(on);
+
+    if (_opened.isNotEmpty) {
+      await _player.setShuffle(on);
+    }
+
     _changes.add(null);
   }
 
@@ -181,6 +203,7 @@ class MediaKitEngine implements AudioEngine {
     _index = index;
     _moved(position);
     final playlist = Playlist(medias, index: index);
+
     if (position == Duration.zero) {
       await _player.open(playlist, play: play);
     } else {
@@ -189,9 +212,15 @@ class MediaKitEngine implements AudioEngine {
       await _player.open(playlist, play: false);
       await loaded.timeout(const Duration(seconds: 10), onTimeout: () => Duration.zero);
       await seek(position);
-      if (play) await _player.play();
+
+      if (play) {
+        await _player.play();
+      }
     }
-    if (_shuffle) await _player.setShuffle(true);
+
+    if (_shuffle) {
+      await _player.setShuffle(true);
+    }
   }
 
   @override
@@ -213,7 +242,11 @@ class MediaKitEngine implements AudioEngine {
     final again = index == _index && !_player.state.completed;
     _index = index;
     _moved(Duration.zero);
-    if (!again) return _player.jump(index); // which plays too
+
+    if (!again) {
+      return _player.jump(index); // which plays too
+    }
+
     // mpv ignores a jump to the track it is on. Once the queue has ended, media_kit's jump is the one
     // that works, since its play would go back to the first track.
     await _player.seek(Duration.zero);
@@ -234,6 +267,7 @@ class MediaKitEngine implements AudioEngine {
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }
+
     await _changes.close();
     await _player.dispose();
   }

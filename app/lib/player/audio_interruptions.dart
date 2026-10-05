@@ -19,7 +19,10 @@ class AudioInterruptions {
   /// Sets the app's audio session up for music, on iOS: it keeps playing in the background and with
   /// the silent switch on, and calls interrupt it. Null elsewhere, or when it can't.
   static Future<AudioInterruptions?> start() async {
-    if (!Platform.isIOS) return null;
+    if (!Platform.isIOS) {
+      return null;
+    }
+
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
@@ -43,16 +46,26 @@ class AudioInterruptions {
 
   void _interrupted(AudioInterruptionEvent event) {
     final player = _player;
-    if (player == null) return;
+
+    if (player == null) {
+      return;
+    }
+
     if (event.begin) {
       // The system lowers our volume itself, and raises it again.
-      if (event.type == AudioInterruptionType.duck) return;
+      if (event.type == AudioInterruptionType.duck) {
+        return;
+      }
+
       final playing = player.playing;
       _pause();
       _resume = playing;
     } else {
       // A pause is the system saying to resume; unknown, that we shouldn't.
-      if (_resume && event.type == AudioInterruptionType.pause) unawaited(player.play());
+      if (_resume && event.type == AudioInterruptionType.pause) {
+        unawaited(player.play());
+      }
+
       _resume = false;
     }
   }
@@ -60,6 +73,9 @@ class AudioInterruptions {
   void _pause() {
     _resume = false;
     final player = _player;
-    if (player != null && player.playing) unawaited(player.pause());
+
+    if (player != null && player.playing) {
+      unawaited(player.pause());
+    }
   }
 }

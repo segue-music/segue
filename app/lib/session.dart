@@ -47,6 +47,7 @@ class Session {
     final api = await _prefs.getString('api') ?? Api.subsonic.name;
     final userId = await _prefs.getString('userId');
     final String? token, salt;
+
     try {
       token = await _secure.read(key: 'token');
       salt = await _secure.read(key: 'salt');
@@ -54,8 +55,13 @@ class Session {
       debugPrint('secure storage unavailable: $e');
       return null;
     }
-    if (server == null || username == null || token == null) return null;
+
+    if (server == null || username == null || token == null) {
+      return null;
+    }
+
     final Credentials credentials;
+
     if (api == Api.jellyfin.name && userId != null) {
       credentials = JellyfinCredentials(username: username, userId: userId, token: token);
     } else if (api == Api.subsonic.name && salt != null) {
@@ -63,6 +69,7 @@ class Session {
     } else {
       return null;
     }
+
     final hub = await _prefs.getString('hub');
     return Session(
       server: Uri.parse(server),
@@ -76,11 +83,13 @@ class Session {
   Future<void> save() async {
     await _prefs.setString('server', server.toString());
     await _prefs.setString('username', credentials.username);
+
     if (hub == null) {
       await _prefs.remove('hub');
     } else {
       await _prefs.setString('hub', hub.toString());
     }
+
     switch (credentials) {
       case SubsonicCredentials(:final token, :final salt):
         await _prefs.setString('api', Api.subsonic.name);
@@ -109,9 +118,17 @@ class Session {
   /// The id the hub knows this device by: one per installation, generated the first time.
   static Future<String> thisDeviceId() async {
     final fromEnv = Platform.environment['SEGUE_DEVICE_ID'];
-    if (fromEnv != null) return fromEnv;
+
+    if (fromEnv != null) {
+      return fromEnv;
+    }
+
     final existing = await _prefs.getString('deviceId');
-    if (existing != null) return existing;
+
+    if (existing != null) {
+      return existing;
+    }
+
     final id = const Uuid().v4();
     await _prefs.setString('deviceId', id);
     return id;

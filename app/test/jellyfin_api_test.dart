@@ -103,9 +103,11 @@ void main() {
       'AlbumId': albumId,
       'UserData': {'PlayCount': plays, 'Played': true},
     };
+
     final asked = <http.Request>[];
     final albums = await jellyfin((request) {
       final query = request.url.queryParameters;
+
       if (query['IncludeItemTypes'] == 'Audio') {
         return items([
           played('s0', null, 20), // a song in no album
@@ -115,6 +117,7 @@ void main() {
           played('s4', 'a3', 1),
         ]);
       }
+
       // Asked by id, in whatever order the server likes.
       final ids = query['Ids']?.split(',') ?? const [];
       return items([
@@ -141,8 +144,15 @@ void main() {
     final asked = <http.Request>[];
     final (found, songs) = await jellyfin((request) {
       final query = request.url.queryParameters;
-      if (query['Ids'] == 'a1') return items([album]);
-      if (query['ParentId'] == 'a1') return items([song]);
+
+      if (query['Ids'] == 'a1') {
+        return items([album]);
+      }
+
+      if (query['ParentId'] == 'a1') {
+        return items([song]);
+      }
+
       return http.Response('', 404);
     }, asked).album('a1');
     expect(found.name, 'Toys in the Attic');
@@ -162,7 +172,10 @@ void main() {
     final asked = <http.Request>[];
     final (:artists, :albums, :songs) = await jellyfin((request) {
       // Artists from their own endpoint: Jellyfin's Items doesn't list them.
-      if (request.url.path == '/jellyfin/Artists/AlbumArtists') return items([artist]);
+      if (request.url.path == '/jellyfin/Artists/AlbumArtists') {
+        return items([artist]);
+      }
+
       return switch (request.url.queryParameters['IncludeItemTypes']) {
         'MusicAlbum' => items([album]),
         'Audio' => items([song]),
@@ -188,8 +201,15 @@ void main() {
   test('an artist and their albums', () async {
     final (found, albums) = await jellyfin((request) {
       final query = request.url.queryParameters;
-      if (query['Ids'] == 'ar1') return items([artist]);
-      if (query['AlbumArtistIds'] == 'ar1' && query['IncludeItemTypes'] == 'MusicAlbum') return items([album]);
+
+      if (query['Ids'] == 'ar1') {
+        return items([artist]);
+      }
+
+      if (query['AlbumArtistIds'] == 'ar1' && query['IncludeItemTypes'] == 'MusicAlbum') {
+        return items([album]);
+      }
+
       return http.Response('', 404);
     }).artist('ar1');
     expect(found.name, 'Aerosmith');
@@ -210,6 +230,7 @@ void main() {
 
   test('a sign-in the server forgot is an auth error, also from pages that ask for two things at once', () async {
     final forgot = jellyfin((_) => http.Response('', 401));
+
     for (final request in [
       () => forgot.albums(order: AlbumOrder.name),
       () => forgot.album('a1'),

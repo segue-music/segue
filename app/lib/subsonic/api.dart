@@ -122,9 +122,11 @@ class SubsonicApi implements MediaServer {
   @override
   Future<Uint8List> coverArt(String id, {int size = 300}) async {
     final response = await _http.get(coverArtUrl(id, size: size));
+
     if (response.statusCode != 200 || !(response.headers['content-type'] ?? '').startsWith('image/')) {
       throw ServerError('no cover for $id (HTTP ${response.statusCode})');
     }
+
     return response.bodyBytes;
   }
 
@@ -148,18 +150,22 @@ class SubsonicApi implements MediaServer {
 
   Future<Map<String, dynamic>> _get(String endpoint, [Map<String, String> params = const {}]) async {
     final response = await _http.get(_url(endpoint, params));
+
     if (response.statusCode != 200) {
       throw ServerError('${server.host}: HTTP ${response.statusCode}');
     }
+
     final body =
         (jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>)['subsonic-response']
             as Map<String, dynamic>;
+
     if (body['status'] != 'ok') {
       final error = body['error'] as Map<String, dynamic>?;
       final code = (error?['code'] as num?)?.toInt();
       // Code 40 is a wrong username or password.
       throw ServerError(error?['message'] as String? ?? 'request failed', isAuth: code == 40 || code == 41);
     }
+
     return body;
   }
 

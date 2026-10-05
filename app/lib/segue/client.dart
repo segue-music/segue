@@ -83,12 +83,15 @@ class SegueClient extends ChangeNotifier {
   Future<void> start() async {
     _running = true;
     var backoff = const Duration(seconds: 1);
+
     while (_running) {
       _setStatus(HubStatus.connecting);
+
       try {
         await connect();
         backoff = const Duration(seconds: 1);
         await closed;
+
         // Closed by the hub after accepting us: the same device connected elsewhere (4003)
         // must not reconnect, or the two would take turns kicking each other out.
         if (lastClose?.isFinal ?? false) {
@@ -98,6 +101,7 @@ class SegueClient extends ChangeNotifier {
         }
       } on HubClosed catch (e) {
         lastClose = e;
+
         if (e.isFinal) {
           _running = false;
           _setStatus(HubStatus.rejected);
@@ -106,11 +110,16 @@ class SegueClient extends ChangeNotifier {
       } catch (_) {
         // network error: retry below
       }
-      if (!_running) break;
+
+      if (!_running) {
+        break;
+      }
+
       _setStatus(HubStatus.offline);
       await Future<void>.delayed(backoff);
       backoff = Duration(milliseconds: min(backoff.inMilliseconds * 2, 30000));
     }
+
     _setStatus(HubStatus.offline);
   }
 
@@ -130,20 +139,27 @@ class SegueClient extends ChangeNotifier {
       (data) {
         final msg = jsonDecode(data as String) as Map<String, dynamic>;
         _receive(msg);
-        if (msg['type'] == 'welcome' && !welcomed.isCompleted) welcomed.complete();
+
+        if (msg['type'] == 'welcome' && !welcomed.isCompleted) {
+          welcomed.complete();
+        }
       },
       onDone: () {
         _open = false;
         lastClose = HubClosed(channel.closeCode, channel.closeReason);
+
         for (final waiting in _waiting.values) {
           waiting.complete(const Result(ok: false, error: 'closed'));
         }
+
         _waiting.clear();
+
         if (welcomed.isCompleted) {
           _setStatus(HubStatus.offline);
         } else {
           welcomed.completeError(HubClosed(channel.closeCode, channel.closeReason));
         }
+
         ended.complete();
       },
       onError: (_) {}, // onDone follows
@@ -190,7 +206,10 @@ class SegueClient extends ChangeNotifier {
       case 'state':
         final device = devices[msg['deviceId']];
         final report = StampedState.fromJson(msg['state'] as Map<String, dynamic>);
-        if (device != null) device.state = device.state?.merge(report) ?? report;
+
+        if (device != null) {
+          device.state = device.state?.merge(report) ?? report;
+        }
       case 'gone':
         devices.remove(msg['deviceId']);
       case 'command':
@@ -204,13 +223,18 @@ class SegueClient extends ChangeNotifier {
       default:
         return;
     }
+
     notifyListeners();
   }
 
   Future<void> _obey(String id, Command command, String from) async {
     try {
       final handler = onCommand;
-      if (handler == null) throw const CommandFailed('unsupported');
+
+      if (handler == null) {
+        throw const CommandFailed('unsupported');
+      }
+
       await handler(command, from);
       _send({'type': 'result', 're': id, 'ok': true});
     } catch (e) {
@@ -219,7 +243,10 @@ class SegueClient extends ChangeNotifier {
   }
 
   Future<Result> _ask(Map<String, Object?> msg) {
-    if (!_open || status != HubStatus.connected) return Future.value(const Result(ok: false, error: 'closed'));
+    if (!_open || status != HubStatus.connected) {
+      return Future.value(const Result(ok: false, error: 'closed'));
+    }
+
     final id = 'r${++_seq}';
     final answer = Completer<Result>();
     _waiting[id] = answer;
@@ -228,11 +255,16 @@ class SegueClient extends ChangeNotifier {
   }
 
   void _send(Map<String, Object?> msg) {
-    if (_open) _channel!.sink.add(jsonEncode(msg));
+    if (_open) {
+      _channel!.sink.add(jsonEncode(msg));
+    }
   }
 
   void _setStatus(HubStatus value) {
-    if (status == value) return;
+    if (status == value) {
+      return;
+    }
+
     status = value;
     notifyListeners();
   }

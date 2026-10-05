@@ -33,12 +33,14 @@ void main() {
         'filled': theme.filledButtonTheme.style,
         'text': theme.textButtonTheme.style,
       };
+
       for (final MapEntry(key: name, value: style) in styles.entries) {
         final focused = style?.side?.resolve({WidgetState.focused});
         expect(focused?.width, greaterThanOrEqualTo(2), reason: '$brightness $name button, focused');
         expect(focused?.color, theme.colorScheme.onSurface, reason: '$brightness $name button, focused');
         expect(style?.side?.resolve({}), isNull, reason: '$brightness $name button, not focused');
       }
+
       final searchBar = theme.searchBarTheme.side;
       expect(searchBar?.resolve({WidgetState.focused})?.width, greaterThanOrEqualTo(2), reason: '$brightness search');
       expect(searchBar?.resolve({}), isNull, reason: '$brightness search bar, not focused');

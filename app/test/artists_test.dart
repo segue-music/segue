@@ -24,7 +24,11 @@ http.Response subsonic(Map<String, Object?> body) => http.Response(
 /// A server with two artists: Aerosmith, with two albums, and Cheap Trick.
 http.Response server(http.Request request) {
   final path = request.url.path;
-  if (path.endsWith('getAlbumList2.view')) return subsonic({'albumList2': <String, Object?>{}});
+
+  if (path.endsWith('getAlbumList2.view')) {
+    return subsonic({'albumList2': <String, Object?>{}});
+  }
+
   if (path.endsWith('getArtists.view')) {
     return subsonic({
       'artists': {
@@ -45,6 +49,7 @@ http.Response server(http.Request request) {
       },
     });
   }
+
   if (path.endsWith('getArtist.view')) {
     return subsonic({
       'artist': {
@@ -58,6 +63,7 @@ http.Response server(http.Request request) {
       },
     });
   }
+
   if (path.endsWith('getAlbum.view')) {
     return subsonic({
       'album': {
@@ -70,6 +76,7 @@ http.Response server(http.Request request) {
       },
     });
   }
+
   if (path.endsWith('search3.view')) {
     return subsonic({
       'searchResult3': {
@@ -79,6 +86,7 @@ http.Response server(http.Request request) {
       },
     });
   }
+
   return http.Response('', 404);
 }
 

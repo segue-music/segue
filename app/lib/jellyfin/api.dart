@@ -35,6 +35,7 @@ class JellyfinApi implements MediaServer {
     http.Client? client,
   }) async {
     final http_ = client ?? http.Client();
+
     try {
       final response = await http_.post(
         _withSlash(server).resolve('Users/AuthenticateByName'),
@@ -55,7 +56,10 @@ class JellyfinApi implements MediaServer {
         client: http_,
       );
     } on Object {
-      if (client == null) http_.close();
+      if (client == null) {
+        http_.close();
+      }
+
       rethrow;
     }
   }
@@ -99,16 +103,25 @@ class JellyfinApi implements MediaServer {
       'Limit': '1000',
     });
     final plays = <String, int>{};
+
     for (final song in songs) {
       final album = song['AlbumId'] as String?;
       final count = ((song['UserData'] as Map<String, dynamic>?)?['PlayCount'] as num?)?.toInt() ?? 0;
-      if (album != null) plays[album] = (plays[album] ?? 0) + count;
+
+      if (album != null) {
+        plays[album] = (plays[album] ?? 0) + count;
+      }
     }
+
     final ranked = [
       for (final (i, MapEntry(key: id, value: count)) in plays.entries.indexed) (id: id, count: count, i: i),
     ]..sort((a, b) => a.count != b.count ? b.count.compareTo(a.count) : a.i.compareTo(b.i));
     final ids = [for (final album in ranked.take(size)) album.id];
-    if (ids.isEmpty) return const [];
+
+    if (ids.isEmpty) {
+      return const [];
+    }
+
     // Asked by id, they come in whatever order.
     final albums = {
       for (final json in await _items({'Ids': ids.join(',')})) json['Id'] as String: _album(json),
@@ -172,9 +185,11 @@ class JellyfinApi implements MediaServer {
   @override
   Future<Uint8List> coverArt(String id, {int size = 300}) async {
     final response = await _http.get(coverArtUrl(id, size: size));
+
     if (response.statusCode != 200 || !(response.headers['content-type'] ?? '').startsWith('image/')) {
       throw ServerError('no cover for $id (HTTP ${response.statusCode})');
     }
+
     return response.bodyBytes;
   }
 
@@ -218,7 +233,11 @@ class JellyfinApi implements MediaServer {
     if (response.statusCode == 401 || response.statusCode == 403) {
       throw const ServerError('the server refused the sign-in', isAuth: true);
     }
-    if (response.statusCode != 200) throw ServerError('${server.host}: HTTP ${response.statusCode}');
+
+    if (response.statusCode != 200) {
+      throw ServerError('${server.host}: HTTP ${response.statusCode}');
+    }
+
     return jsonDecode(utf8.decode(response.bodyBytes));
   }
 

@@ -35,9 +35,16 @@ class _ArtistsViewState extends State<ArtistsView> {
   Widget build(BuildContext context) => FutureBuilder(
     future: _artists,
     builder: (context, snapshot) {
-      if (snapshot.hasError) return Center(child: Text('Não consegui listar os artistas: ${snapshot.error}'));
+      if (snapshot.hasError) {
+        return Center(child: Text('Não consegui listar os artistas: ${snapshot.error}'));
+      }
+
       final artists = snapshot.data;
-      if (artists == null) return const Center(child: Spinner());
+
+      if (artists == null) {
+        return const Center(child: Spinner());
+      }
+
       return RefreshIndicator(
         onRefresh: () async {
           final reload = ServicesScope.of(context).api.artists();

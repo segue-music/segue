@@ -20,7 +20,10 @@ class MediaControls extends BaseAudioHandler with SeekHandler {
   /// Starts the system's media service, on the platforms where the app sets it up: Linux (MPRIS)
   /// and iOS for now. Null when it can't, e.g. without a D-Bus session.
   static Future<MediaControls?> start() async {
-    if (!Platform.isLinux && !Platform.isIOS) return null;
+    if (!Platform.isLinux && !Platform.isIOS) {
+      return null;
+    }
+
     try {
       return await AudioService.init(
         builder: MediaControls.new,
@@ -48,12 +51,15 @@ class MediaControls extends BaseAudioHandler with SeekHandler {
   void _sync() {
     _tick?.cancel();
     final now = _connect?.nowPlaying;
+
     if (now?.title == null) {
       mediaItem.add(null);
       playbackState.add(PlaybackState());
       return;
     }
+
     final id = [now!.device, now.coverArt, now.title].join('|');
+
     if (mediaItem.value?.id != id) {
       mediaItem.add(
         MediaItem(
@@ -65,6 +71,7 @@ class MediaControls extends BaseAudioHandler with SeekHandler {
       );
       unawaited(_loadCover(now.coverArt, id));
     }
+
     playbackState.add(
       PlaybackState(
         controls: [
@@ -78,23 +85,35 @@ class MediaControls extends BaseAudioHandler with SeekHandler {
         updatePosition: now.position,
       ),
     );
+
     // MPRIS only learns the position from these updates: refresh it while playing.
-    if (now.playing) _tick = Timer(const Duration(seconds: 1), _sync);
+    if (now.playing) {
+      _tick = Timer(const Duration(seconds: 1), _sync);
+    }
   }
 
   /// The cover goes to the system as a file: its server URL carries the login token.
   Future<void> _loadCover(String? coverId, String itemId) async {
     final api = _api;
-    if (coverId == null || api == null) return;
+
+    if (coverId == null || api == null) {
+      return;
+    }
+
     try {
       final dir = Directory('${(await getTemporaryDirectory()).path}/segue-covers');
       final file = File('${dir.path}/${coverId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.jpg');
+
       if (!await file.exists()) {
         await dir.create(recursive: true);
         await file.writeAsBytes(await api.coverArt(coverId, size: 512));
       }
+
       final item = mediaItem.value;
-      if (item?.id == itemId) mediaItem.add(item!.copyWith(artUri: file.uri));
+
+      if (item?.id == itemId) {
+        mediaItem.add(item!.copyWith(artUri: file.uri));
+      }
     } on Object catch (e) {
       debugPrint('cover for the media controls: $e'); // the controls just go without it
     }
@@ -120,6 +139,9 @@ class MediaControls extends BaseAudioHandler with SeekHandler {
 
   Future<void> _do(Future<Result> Function(ConnectController connect) action) async {
     final connect = _connect;
-    if (connect != null) await action(connect);
+
+    if (connect != null) {
+      await action(connect);
+    }
   }
 }

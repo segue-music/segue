@@ -45,7 +45,11 @@ class FakeEngine implements AudioEngine {
     this.tracks = tracks;
     _order = [for (var i = 0; i < tracks.length; i++) i];
     _index = index;
-    if (_shuffle) _shuffleOrder();
+
+    if (_shuffle) {
+      _shuffleOrder();
+    }
+
     _seek(position);
     _playing = play;
     _changes.add(null);
@@ -59,20 +63,28 @@ class FakeEngine implements AudioEngine {
 
   @override
   Future<void> setShuffle(bool on) async {
-    if (on == _shuffle) return;
+    if (on == _shuffle) {
+      return;
+    }
+
     _shuffle = on;
+
     if (on) {
       _shuffleOrder();
     } else if (_order.isNotEmpty) {
       _index = _order[_index];
       _order = [for (var i = 0; i < _order.length; i++) i];
     }
+
     _changes.add(null);
   }
 
   /// A predictable shuffle: the current track first, then the others backwards.
   void _shuffleOrder() {
-    if (_order.isEmpty) return;
+    if (_order.isEmpty) {
+      return;
+    }
+
     final current = _order[_index];
     _order = [current, ..._order.reversed.where((track) => track != current)];
     _index = 0;

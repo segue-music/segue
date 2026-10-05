@@ -63,7 +63,10 @@ class _PlayPauseAction extends Action<PlayPauseIntent> {
   /// Disabled while typing, so that the key isn't taken from the text field.
   @override
   bool isEnabled(PlayPauseIntent intent) {
-    if (intent.whileTyping) return true;
+    if (intent.whileTyping) {
+      return true;
+    }
+
     final focused = FocusManager.instance.primaryFocus?.context;
     return focused == null ||
         (focused.widget is! EditableText && focused.findAncestorWidgetOfExactType<EditableText>() == null);

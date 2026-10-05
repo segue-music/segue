@@ -31,7 +31,10 @@ Future<(PlayerController, List<String?>)> pumpHome(WidgetTester tester, Size siz
     client: MockClient((request) async {
       if (request.url.path.endsWith('getAlbumList2.view')) {
         // Only among the latest: nothing has played yet.
-        if (request.url.queryParameters['type'] != 'newest') return subsonic({'albumList2': <String, Object?>{}});
+        if (request.url.queryParameters['type'] != 'newest') {
+          return subsonic({'albumList2': <String, Object?>{}});
+        }
+
         return subsonic({
           'albumList2': {
             'album': [
@@ -40,6 +43,7 @@ Future<(PlayerController, List<String?>)> pumpHome(WidgetTester tester, Size siz
           },
         });
       }
+
       queries.add(request.url.queryParameters['query']);
       return subsonic({
         'searchResult3': {

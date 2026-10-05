@@ -21,7 +21,11 @@ Future<bool> isTelevision() async {
 /// Returns whether it is one.
 Future<bool> adaptToTelevision() async {
   final television = await isTelevision();
-  if (television) FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+
+  if (television) {
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+  }
+
   return television;
 }
 
@@ -30,9 +34,13 @@ Future<bool> adaptToTelevision() async {
 Future<String> systemDeviceName() async {
   try {
     final name = await _channel.invokeMethod<String>('deviceName');
-    if (name != null && name.trim().isNotEmpty) return name.trim();
+
+    if (name != null && name.trim().isNotEmpty) {
+      return name.trim();
+    }
   } on MissingPluginException {
     // no such channel: not Android
   }
+
   return Platform.isIOS ? 'iPhone' : Platform.localHostname;
 }

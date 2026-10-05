@@ -144,6 +144,7 @@ void main() {
       player,
       ConnectController(player: player),
     );
+
     Future<void> pumpAt(Size size) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;

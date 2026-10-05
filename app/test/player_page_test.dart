@@ -26,6 +26,7 @@ Future<PlayerController> pumpBar(WidgetTester tester, {SegueClient? client}) asy
     client: MockClient((_) async => http.Response('', 404)),
   );
   final player = PlayerController(FakeEngine(), api);
+
   if (client == null) {
     await player.playQueue(const [
       Song(
@@ -37,6 +38,7 @@ Future<PlayerController> pumpBar(WidgetTester tester, {SegueClient? client}) asy
       ),
     ], play: false);
   }
+
   final connect = ConnectController(player: player, client: client);
   // ignore: invalid_use_of_protected_member, invalid_use_of_visible_for_testing_member
   client?.notifyListeners(); // as when another device's state arrives
@@ -78,6 +80,7 @@ void main() {
     expect(onPage(find.text('Toys in the Attic')), findsOneWidget);
     expect(onPage(find.text('0:00')), findsOneWidget);
     expect(onPage(find.text('4:34')), findsOneWidget);
+
     for (final tooltip in ['Ativar aleatório', 'Anterior', 'Tocar', 'Próxima', 'Repetir a lista', 'Aparelhos']) {
       expect(onPage(find.byTooltip(tooltip)), findsOneWidget, reason: tooltip);
     }

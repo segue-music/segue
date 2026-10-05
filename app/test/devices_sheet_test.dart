@@ -38,9 +38,11 @@ Future<void> openSheet(WidgetTester tester, List<Device> devices) async {
     auth: const Auth.subsonic(username: 'a', token: 't', salt: 's'),
     device: const DeviceInfo(id: 'me', name: 'me', client: 'test', api: Api.subsonic, roles: [], capabilities: []),
   );
+
   for (final device in devices) {
     client.devices[device.id] = device;
   }
+
   final player = PlayerController(FakeEngine(), api);
   final services = Services(
     Session(server: Uri.parse('https://music.test'), credentials: credentials, deviceId: 'me', deviceName: 'Notebook'),

@@ -58,7 +58,10 @@ class _HomePageState extends State<HomePage> {
       _section = section;
       _opened.add(section);
     });
-    if (_results != null) _clearSearch();
+
+    if (_results != null) {
+      _clearSearch();
+    }
   }
 
   void _typed(String text) {
@@ -69,7 +72,11 @@ class _HomePageState extends State<HomePage> {
   void _searchFor(String text) {
     _typing?.cancel();
     final query = text.trim();
-    if (query == _query) return;
+
+    if (query == _query) {
+      return;
+    }
+
     setState(() {
       _query = query;
       _results = query.isEmpty ? null : ServicesScope.of(context).api.search(query);
@@ -207,9 +214,11 @@ class _HubStatus extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final client = this.client;
+
     if (client == null) {
       return const Tooltip(message: 'Sem hub: só toca neste aparelho', child: Icon(Icons.cloud_off));
     }
+
     return ListenableBuilder(
       listenable: client,
       builder: (context, _) => switch (client.status) {

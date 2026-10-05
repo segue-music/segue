@@ -20,18 +20,32 @@ class SearchResultsList extends StatelessWidget {
   static Future<void> _play(BuildContext context, List<Song> songs, int index) async {
     final messenger = ScaffoldMessenger.of(context);
     final result = await ServicesScope.of(context).connect.playSongs(songs, index);
-    if (!result.ok) messenger.showSnackBar(SnackBar(content: Text(describeError(result.error))));
+
+    if (!result.ok) {
+      messenger.showSnackBar(SnackBar(content: Text(describeError(result.error))));
+    }
   }
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
     future: results,
     builder: (context, snapshot) {
-      if (snapshot.hasError) return Center(child: Text('Não consegui buscar: ${snapshot.error}'));
+      if (snapshot.hasError) {
+        return Center(child: Text('Não consegui buscar: ${snapshot.error}'));
+      }
+
       final results = snapshot.data;
-      if (results == null) return const Center(child: Spinner());
+
+      if (results == null) {
+        return const Center(child: Spinner());
+      }
+
       final (:artists, :albums, :songs) = results;
-      if (artists.isEmpty && albums.isEmpty && songs.isEmpty) return const Center(child: Text('Nada encontrado.'));
+
+      if (artists.isEmpty && albums.isEmpty && songs.isEmpty) {
+        return const Center(child: Text('Nada encontrado.'));
+      }
+
       return ListView(
         children: [
           if (artists.isNotEmpty) const _Heading('Artistas'),

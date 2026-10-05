@@ -35,9 +35,16 @@ class _ArtistPageState extends State<ArtistPage> {
       body: FutureBuilder(
         future: _artist,
         builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text('Não consegui abrir o artista: ${snapshot.error}'));
+          if (snapshot.hasError) {
+            return Center(child: Text('Não consegui abrir o artista: ${snapshot.error}'));
+          }
+
           final data = snapshot.data;
-          if (data == null) return const Center(child: Spinner());
+
+          if (data == null) {
+            return const Center(child: Spinner());
+          }
+
           final (artist, albums) = data;
           final newestFirst = [...albums]..sort((a, b) => (b.year ?? 0).compareTo(a.year ?? 0));
           return AlbumGrid(

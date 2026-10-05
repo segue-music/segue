@@ -22,7 +22,11 @@ class Cover extends StatelessWidget {
       child: Center(child: Icon(icon)),
     );
     final id = this.id;
-    if (id == null) return placeholder;
+
+    if (id == null) {
+      return placeholder;
+    }
+
     return Image.network(
       ServicesScope.of(context).api.coverArtUrl(id, size: size).toString(),
       fit: BoxFit.cover,

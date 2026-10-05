@@ -27,17 +27,28 @@ class NotAMediaServer implements Exception {
 Future<Api> detectApi(Uri server, {http.Client? client}) async {
   final http_ = client ?? http.Client();
   final base = server.path.endsWith('/') ? server : server.replace(path: '${server.path}/');
+
   try {
     final ping = await _json(
       http_,
       base.resolve('rest/ping.view').replace(queryParameters: {'v': '1.16.1', 'c': clientName, 'f': 'json'}),
     );
-    if (ping is Map && ping['subsonic-response'] is Map) return Api.subsonic;
+
+    if (ping is Map && ping['subsonic-response'] is Map) {
+      return Api.subsonic;
+    }
+
     final info = await _json(http_, base.resolve('System/Info/Public'));
-    if (info is Map && info['Id'] is String) return Api.jellyfin;
+
+    if (info is Map && info['Id'] is String) {
+      return Api.jellyfin;
+    }
   } finally {
-    if (client == null) http_.close();
+    if (client == null) {
+      http_.close();
+    }
   }
+
   throw NotAMediaServer(server);
 }
 
@@ -45,8 +56,15 @@ Future<Api> detectApi(Uri server, {http.Client? client}) async {
 /// web page). Throws on what may go away: no network, HTTP 5xx.
 Future<Object?> _json(http.Client client, Uri url) async {
   final response = await client.get(url).timeout(const Duration(seconds: 10));
-  if (response.statusCode >= 400 && response.statusCode < 500) return null;
-  if (response.statusCode != 200) throw ServerError('${url.host}: HTTP ${response.statusCode}');
+
+  if (response.statusCode >= 400 && response.statusCode < 500) {
+    return null;
+  }
+
+  if (response.statusCode != 200) {
+    throw ServerError('${url.host}: HTTP ${response.statusCode}');
+  }
+
   try {
     return jsonDecode(utf8.decode(response.bodyBytes));
   } on FormatException {
@@ -67,11 +85,15 @@ Future<MediaServer> signIn(
   switch (await detectApi(server, client: client)) {
     case Api.subsonic:
       final api = SubsonicApi(server, SubsonicCredentials.fromPassword(username, password), client: client);
+
       try {
         await api.ping();
         return api;
       } on Object {
-        if (client == null) api.close();
+        if (client == null) {
+          api.close();
+        }
+
         rethrow;
       }
     case Api.jellyfin:

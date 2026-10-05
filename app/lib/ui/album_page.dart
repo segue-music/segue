@@ -28,6 +28,7 @@ class _AlbumPageState extends State<AlbumPage> {
 
   Future<void> _play(List<Song> songs, int index) async {
     final result = await ServicesScope.of(context).connect.playSongs(songs, index);
+
     if (!result.ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeError(result.error))));
     }
@@ -41,9 +42,16 @@ class _AlbumPageState extends State<AlbumPage> {
       body: FutureBuilder(
         future: _album,
         builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text('Não consegui abrir o álbum: ${snapshot.error}'));
+          if (snapshot.hasError) {
+            return Center(child: Text('Não consegui abrir o álbum: ${snapshot.error}'));
+          }
+
           final data = snapshot.data;
-          if (data == null) return const Center(child: Spinner());
+
+          if (data == null) {
+            return const Center(child: Spinner());
+          }
+
           final (album, songs) = data;
           return ListView(
             children: [

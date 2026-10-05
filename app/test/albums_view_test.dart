@@ -34,14 +34,23 @@ Future<List<String>> pumpAlbums(WidgetTester tester, {required int count, int? f
     credentials,
     client: MockClient((request) async {
       final query = request.url.queryParameters;
-      if (!request.url.path.endsWith('getAlbumList2.view')) return http.Response('', 404);
-      if (query['type'] != 'alphabeticalByName') return subsonic({'albumList2': <String, Object?>{}});
+
+      if (!request.url.path.endsWith('getAlbumList2.view')) {
+        return http.Response('', 404);
+      }
+
+      if (query['type'] != 'alphabeticalByName') {
+        return subsonic({'albumList2': <String, Object?>{}});
+      }
+
       asked.add('${query['type']} ${query['offset']} ${query['size']}');
       final offset = int.parse(query['offset']!);
+
       if (offset == failing) {
         failing = null;
         return http.Response('', 500);
       }
+
       final page = names.skip(offset).take(int.parse(query['size']!));
       return subsonic({
         'albumList2': {

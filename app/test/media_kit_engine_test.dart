@@ -19,6 +19,7 @@ bool get hasLibmpv {
       continue;
     }
   }
+
   return false;
 }
 
@@ -27,7 +28,9 @@ Uri tone(Directory dir, int n, {double seconds = 4}) {
   const rate = 8000;
   final samples = (rate * seconds).round();
   final data = ByteData(44 + samples * 2);
+
   void text(int offset, String s) => s.codeUnits.asMap().forEach((i, c) => data.setUint8(offset + i, c));
+
   text(0, 'RIFF');
   data.setUint32(4, 36 + samples * 2, Endian.little);
   text(8, 'WAVEfmt ');
@@ -41,9 +44,11 @@ Uri tone(Directory dir, int n, {double seconds = 4}) {
     ..setUint16(34, 16, Endian.little);
   text(36, 'data');
   data.setUint32(40, samples * 2, Endian.little);
+
   for (var i = 0; i < samples; i++) {
     data.setInt16(44 + i * 2, (sin(2 * pi * (300 + 100 * n) * i / rate) * 8000).round(), Endian.little);
   }
+
   return (File('${dir.path}/t$n.wav')..writeAsBytesSync(data.buffer.asUint8List())).uri;
 }
 
@@ -198,7 +203,9 @@ void main() {
     final opened = DateTime.now();
     final restarts = <Duration>[];
     final subscription = engine.changes.listen((_) {
-      if (DateTime.now().difference(opened) > const Duration(milliseconds: 400)) restarts.add(engine.position);
+      if (DateTime.now().difference(opened) > const Duration(milliseconds: 400)) {
+        restarts.add(engine.position);
+      }
     });
     await engine.open(tracks, index: 0, position: Duration.zero, play: true);
     await Future<void>.delayed(const Duration(milliseconds: 2500));

@@ -65,7 +65,10 @@ class PlayerController extends ChangeNotifier {
 
   /// Back to the start of the track; in its first seconds, to the previous one (SPEC.md, section 5).
   Future<void> previous() async {
-    if (index == 0 || position > previousGrace) return seek(Duration.zero);
+    if (index == 0 || position > previousGrace) {
+      return seek(Duration.zero);
+    }
+
     await _jump(index - 1);
   }
 
@@ -136,7 +139,11 @@ class PlayerController extends ChangeNotifier {
           for (final item in items)
             if (item.id != null) Song.fromQueueItem(item),
         ];
-        if (playable.isEmpty) throw const CommandFailed('nothing playable');
+
+        if (playable.isEmpty) {
+          throw const CommandFailed('nothing playable');
+        }
+
         final skippedBefore = items.take(command.index!).where((item) => item.id == null).length;
         await playQueue(
           playable,
@@ -159,7 +166,10 @@ class PlayerController extends ChangeNotifier {
   );
 
   Future<void> _jump(int to) async {
-    if (to < 0 || to >= _queue.length) throw const CommandFailed('no such track');
+    if (to < 0 || to >= _queue.length) {
+      throw const CommandFailed('no such track');
+    }
+
     await _engine.jump(to);
   }
 
@@ -174,7 +184,11 @@ class PlayerController extends ChangeNotifier {
   /// Puts [_queue] in the engine's play order, which a shuffle changes.
   void _followOrder() {
     final order = _engine.order;
-    if (listEquals(order, _order) || order.length != _opened.length) return;
+
+    if (listEquals(order, _order) || order.length != _opened.length) {
+      return;
+    }
+
     _order = List.unmodifiable(order);
     _queue = List.unmodifiable([for (final i in order) _opened[i]]);
     _queueChanged = true;

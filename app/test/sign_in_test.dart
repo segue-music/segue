@@ -83,7 +83,10 @@ void main() {
       late Uri pinged;
       final client = server({
         '/rest/ping.view': (request) {
-          if (!request.url.queryParameters.containsKey('t')) return missingCredentials;
+          if (!request.url.queryParameters.containsKey('t')) {
+            return missingCredentials;
+          }
+
           pinged = request.url;
           return json({
             'subsonic-response': {'status': 'ok'},
@@ -155,6 +158,7 @@ void main() {
         '/System/Info/Public': (_) => jellyfinInfo,
         '/Users/AuthenticateByName': (_) => http.Response('Error processing request.', 401),
       });
+
       for (final client in [subsonic, jellyfin]) {
         await expectLater(
           signIn(

@@ -10,7 +10,10 @@ import 'errors.dart';
 /// The pieces the player bar and the full-screen player share.
 
 String formatDuration(Duration? duration) {
-  if (duration == null) return '';
+  if (duration == null) {
+    return '';
+  }
+
   final seconds = duration.inSeconds;
   return '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
 }
@@ -19,7 +22,10 @@ String formatDuration(Duration? duration) {
 Future<void> runCommand(BuildContext context, Future<Result> Function() command) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   final result = await command();
-  if (!result.ok) messenger?.showSnackBar(SnackBar(content: Text(describeError(result.error))));
+
+  if (!result.ok) {
+    messenger?.showSnackBar(SnackBar(content: Text(describeError(result.error))));
+  }
 }
 
 /// Builds with what plays, wherever it plays: on every change, and twice a second while it plays,
@@ -40,7 +46,9 @@ class _NowPlayingBuilderState extends State<NowPlayingBuilder> {
   void initState() {
     super.initState();
     _tick = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (mounted && (ServicesScope.of(context).connect.nowPlaying?.playing ?? false)) setState(() {});
+      if (mounted && (ServicesScope.of(context).connect.nowPlaying?.playing ?? false)) {
+        setState(() {});
+      }
     });
   }
 
@@ -94,7 +102,9 @@ class _SeekSliderState extends State<SeekSlider> {
     });
     _letGo?.cancel();
     _letGo = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _held = null);
+      if (mounted) {
+        setState(() => _held = null);
+      }
     });
     unawaited(runCommand(context, () => ServicesScope.of(context).connect.seek(target)));
   }
@@ -103,9 +113,11 @@ class _SeekSliderState extends State<SeekSlider> {
   Widget build(BuildContext context) {
     final now = widget.now;
     final held = _held;
+
     if (held != null && !_dragging && (now.position - held).abs() < const Duration(seconds: 1)) {
       _held = null; // the position got there
     }
+
     final position = _held ?? now.position;
     final length = now.duration?.inMilliseconds ?? 0;
     final slider = SliderTheme(
@@ -127,6 +139,7 @@ class _SeekSliderState extends State<SeekSlider> {
     final style = Theme.of(context).textTheme.bodySmall;
     final elapsed = Text(formatDuration(position), style: style);
     final total = Text(formatDuration(now.duration), style: style);
+
     if (widget.timesBelow) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -139,6 +152,7 @@ class _SeekSliderState extends State<SeekSlider> {
         ],
       );
     }
+
     return Row(
       children: [
         SizedBox(

@@ -53,10 +53,12 @@ Future<PlayerController> pumpBarOnSlider(
       home: Scaffold(body: body, bottomNavigationBar: const NowPlayingBar()),
     ),
   );
+
   for (var i = 0; i < 100 && !sliderFocused(); i++) {
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
   }
+
   return player;
 }
 
@@ -70,7 +72,10 @@ Future<void> pumpTvHome(WidgetTester tester, {bool followingAnotherDevice = fals
     Uri.parse('https://music.test'),
     credentials,
     client: MockClient((request) async {
-      if (!request.url.path.endsWith('getAlbumList2.view')) return http.Response('', 404);
+      if (!request.url.path.endsWith('getAlbumList2.view')) {
+        return http.Response('', 404);
+      }
+
       final albums = [for (var i = 0; i < 30; i++) '{"id": "a$i", "name": "Album $i"}'].join(',');
       return http.Response(
         '{"subsonic-response": {"status": "ok", "albumList2": {"album": [$albums]}}}',
@@ -150,6 +155,7 @@ Future<void> tabTo(WidgetTester tester, bool Function() there) async {
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
   }
+
   expect(there(), isTrue);
 }
 
@@ -162,6 +168,7 @@ Future<void> shiftTabTo(WidgetTester tester, bool Function() there) async {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.pump();
   }
+
   expect(there(), isTrue);
 }
 
@@ -232,9 +239,11 @@ void main() {
     expect(focusedTip(), 'Aparelhos');
     await press(tester, LogicalKeyboardKey.arrowRight);
     expect(focusedTip(), 'Aparelhos');
+
     for (var i = 0; i < 4; i++) {
       await press(tester, LogicalKeyboardKey.arrowLeft);
     }
+
     expect(focusedTip(), 'Pausar', reason: 'and back left along the buttons');
     await tester.pumpWidget(const SizedBox());
   });

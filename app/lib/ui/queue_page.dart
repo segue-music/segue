@@ -36,7 +36,9 @@ class _QueuePageState extends State<QueuePage> {
     // On a TV the remote starts on the current track. Elsewhere the page itself takes the focus, so
     // that Esc closes it, and no track looks focused.
     final television = MediaQuery.navigationModeOf(context) == NavigationMode.directional;
+
     void close() => Navigator.of(context).maybePop();
+
     return CallbackShortcuts(
       bindings: {const SingleActivator(LogicalKeyboardKey.escape): close},
       child: Focus(

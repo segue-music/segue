@@ -22,6 +22,7 @@ class _DevicesSheet extends StatelessWidget {
       final messenger = ScaffoldMessenger.of(context);
       final navigator = Navigator.of(context);
       final result = await action();
+
       if (result.ok) {
         navigator.pop();
       } else {
@@ -68,7 +69,10 @@ class _DevicesSheet extends StatelessWidget {
 
   /// Which device plays (equalizer) and which one the app controls (check).
   static Widget? _marks({required bool playing, required bool active}) {
-    if (!playing && !active) return null;
+    if (!playing && !active) {
+      return null;
+    }
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [if (playing) const Icon(Icons.graphic_eq), if (active) const Icon(Icons.check)],

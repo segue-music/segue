@@ -22,7 +22,10 @@ class NowPlayingBar extends StatelessWidget {
     final wide = MediaQuery.sizeOf(context).width >= 600;
     return NowPlayingBuilder(
       builder: (context, connect, now) {
-        if (now == null) return const SizedBox.shrink();
+        if (now == null) {
+          return const SizedBox.shrink();
+        }
+
         return Material(
           color: colors.surfaceContainer,
           child: SafeArea(
@@ -148,20 +151,26 @@ class _BarTraversalPolicy extends ReadingOrderTraversalPolicy {
       for (final node in currentNode.nearestScope!.traversalDescendants)
         if (node != currentNode && FocusTraversalGroup.maybeOfNode(node) == this) node,
     ];
+
     bool level(FocusNode node) => node.rect.top < here.bottom && node.rect.bottom > here.top;
+
     double away(FocusNode node) => (node.rect.center - here.center).distance;
+
     FocusNode? closest(Iterable<FocusNode> nodes) =>
         nodes.isEmpty ? null : nodes.reduce((a, b) => away(a) <= away(b) ? a : b);
+
     final target = closest(switch (direction) {
       TraversalDirection.left => bar.where((node) => level(node) && node.rect.center.dx < here.center.dx),
       TraversalDirection.right => bar.where((node) => level(node) && node.rect.center.dx > here.center.dx),
       TraversalDirection.up => bar.where((node) => node.rect.bottom <= here.top + 1),
       TraversalDirection.down => bar.where((node) => node.rect.top >= here.bottom - 1),
     });
+
     if (target != null) {
       requestFocusCallback(target);
       return true;
     }
+
     // From the top of the bar, up goes on as anywhere else; past its other edges, nowhere.
     return direction == TraversalDirection.up && super.inDirection(currentNode, direction);
   }

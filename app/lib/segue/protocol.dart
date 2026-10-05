@@ -157,7 +157,10 @@ class StampedState extends PlayerState {
 
   /// Where playback is at hub time [now] (epoch ms), extrapolated from the last report.
   int positionAt(int now) {
-    if (status != PlaybackStatus.playing) return positionMs;
+    if (status != PlaybackStatus.playing) {
+      return positionMs;
+    }
+
     final position = positionMs + max<int>(0, now - at);
     final duration = current?.durationMs;
     return duration == null || duration <= 0 ? position : min<int>(position, duration);

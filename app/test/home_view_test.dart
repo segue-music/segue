@@ -49,6 +49,7 @@ Future<List<Map<String, String>>> pumpHome(
     credentials,
     client: MockClient((request) async {
       final query = request.url.queryParameters;
+
       if (request.url.path.endsWith('getAlbumList2.view')) {
         asked.add(query);
         return switch (query['type']) {
@@ -57,6 +58,7 @@ Future<List<Map<String, String>>> pumpHome(
           _ => http.Response('', 500),
         };
       }
+
       if (request.url.path.endsWith('getAlbum.view')) {
         return subsonic({
           'album': {
@@ -68,6 +70,7 @@ Future<List<Map<String, String>>> pumpHome(
           },
         });
       }
+
       return http.Response('', 404);
     }),
   );
@@ -164,8 +167,10 @@ void main() {
     expect(tester.getCenter(forward).dy, moreOrLessEquals(heading.center.dy, epsilon: 4));
 
     final scroll = tester.widget<ListView>(rows.first).controller!;
+
     bool enabled(Finder arrow) =>
         tester.widget<IconButton>(find.ancestor(of: arrow, matching: find.byType(IconButton)).first).onPressed != null;
+
     expect(enabled(back), isFalse, reason: 'at the start');
     expect(enabled(forward), isTrue);
 
@@ -187,6 +192,7 @@ void main() {
       await tester.tap(forward);
       await tester.pumpAndSettle();
     }
+
     expect(enabled(forward), isFalse, reason: 'at the end');
     expect(scroll.offset, scroll.position.maxScrollExtent);
     expect(find.text('Most 19'), findsOneWidget);
@@ -209,6 +215,7 @@ void main() {
       latest: [for (var i = 0; i < 30; i++) 'Latest $i'],
     );
     expect([for (final query in asked) query['size']], ['20', '20']);
+
     for (final (i, prefix) in ['Most', 'Latest'].indexed) {
       await tester.ensureVisible(rows.at(i)); // the second is under the bottom bar, at first
       await tester.pumpAndSettle();
@@ -217,6 +224,7 @@ void main() {
       expect(find.text('$prefix 19'), findsOneWidget);
       expect(find.text('$prefix 20'), findsNothing);
     }
+
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -237,7 +245,9 @@ void main() {
 
   testWidgets('pulling the home down lists both rows again', (tester) async {
     final asked = await pumpHome(tester, const Size(360, 640));
+
     List<String?> types() => [for (final query in asked) query['type']];
+
     expect(types(), unorderedEquals(['frequent', 'newest']));
     await tester.fling(find.text('Mais tocados'), const Offset(0, 400), 1000);
     await tester.pumpAndSettle();
@@ -255,14 +265,18 @@ void main() {
       latest: [for (var i = 0; i < 12; i++) 'Latest $i'],
       television: true,
     );
+
     for (var i = 0; i < 100 && focusedAlbum() != 'Most 0'; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
     }
+
     expect(focusedAlbum(), 'Most 0');
+
     for (var i = 0; i < 7; i++) {
       await press(tester, LogicalKeyboardKey.arrowRight);
     }
+
     expect(focusedAlbum(), 'Most 7');
     expect(tester.getRect(find.text('Most 7')).right, lessThanOrEqualTo(960), reason: 'scrolled into view');
     await press(tester, LogicalKeyboardKey.arrowDown);

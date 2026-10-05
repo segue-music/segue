@@ -175,6 +175,12 @@ Running two app instances on one machine as different devices:
   body explaining the behaviour and why.
 - `app/README.md` lists what the app does and what it doesn't do yet, and the root `README.md` has
   "Next steps". Update both when a feature lands.
+- Dart layout: every `if`, `for` and `while` body is in braces, even a single `return` (the lints
+  `curly_braces_in_flow_control_structures` and `always_put_control_body_on_new_line` enforce it).
+  A statement with braces (`if`, `for`, `while`, `do`, `switch`, `try`, a local function) has a
+  blank line before and after it, separating it from the statements around it, but not at the
+  start or end of its block. A comment above the statement belongs to it, so the blank line goes
+  above the comment. `dart format` keeps blank lines but never adds them, so this is by hand.
 - Docs, comments and tests stay generic: no names from a particular setup (machine or device names,
   hostnames, server paths, the tooling of the server it is developed on). Use names like `laptop`,
   `phone`, `tv` and `music.example`.
