@@ -17,9 +17,10 @@ Windows, macOS, Android and iOS. The interface is in Portuguese for now.
   added to the library, 20 each, with arrows in each row's corner to go a screenful forward and
   back (on a Jellyfin server, which counts plays only by song, an album's plays are its songs',
   added up); albums (by name, the next ones coming as the grid nears its end) and artists (by
-  name, each with their albums); all three in a side rail or, on a phone, a bar at the bottom; the
-  album page; search (artists, albums and songs); and playback through media_kit (libmpv), with a
-  seek bar, shuffle and repeat (the queue or the track), in the player bar and in a full-screen
+  name, each with their albums); all three in a side rail (which a button collapses to its icons,
+  each naming its section on hover, and the app remembers so) or, on a phone, a bar at the bottom;
+  the album page; search (artists, albums and songs); and playback through media_kit (libmpv), with
+  a seek bar, shuffle and repeat (the queue or the track), in the player bar and in a full-screen
   player that the song in the bar opens. In both, the song's title opens its album (as does the
   album's name, in the full-screen player) and its artist their page (the first artist, when it has
   several), whichever device it plays on; on a phone the whole song in the bar opens the player;

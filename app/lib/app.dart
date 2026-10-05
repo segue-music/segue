@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'player/audio_interruptions.dart';
 import 'player/media_controls.dart';
@@ -11,7 +14,14 @@ import 'ui/spinner.dart';
 import 'ui/theme.dart';
 
 class SegueApp extends StatefulWidget {
-  const SegueApp({required this.session, this.mediaControls, this.interruptions, this.television = false, super.key});
+  const SegueApp({
+    required this.session,
+    this.mediaControls,
+    this.interruptions,
+    this.television = false,
+    this.railCollapsed = false,
+    super.key,
+  });
 
   /// The saved session, if any: then the app opens straight on the library.
   final Session? session;
@@ -25,6 +35,14 @@ class SegueApp extends StatefulWidget {
   /// Whether it runs on a TV, driven by a remote's D-pad.
   final bool television;
 
+  /// Whether the side rail shows only its icons, as the user left it.
+  final bool railCollapsed;
+
+  static const _railCollapsedKey = 'railCollapsed';
+
+  /// The [railCollapsed] saved on this device.
+  static Future<bool> loadRailCollapsed() async => await SharedPreferencesAsync().getBool(_railCollapsedKey) ?? false;
+
   @override
   State<SegueApp> createState() => _SegueAppState();
 }
@@ -33,6 +51,14 @@ class _SegueAppState extends State<SegueApp> {
   Services? _services;
   bool _starting = false;
   Object? _error;
+
+  /// The device's, not the session's: signing in again finds it as it was.
+  late bool _railCollapsed = widget.railCollapsed;
+
+  void _saveRailCollapsed(bool collapsed) {
+    _railCollapsed = collapsed;
+    unawaited(SharedPreferencesAsync().setBool(SegueApp._railCollapsedKey, collapsed));
+  }
 
   @override
   void initState() {
@@ -111,7 +137,7 @@ class _SegueAppState extends State<SegueApp> {
         );
       },
       home: services != null
-          ? HomePage(onSignOut: _signOut)
+          ? HomePage(onSignOut: _signOut, railCollapsed: _railCollapsed, onRailCollapsed: _saveRailCollapsed)
           : _starting
           ? const Scaffold(body: Center(child: Spinner()))
           : _error != null

@@ -41,6 +41,8 @@ Future<List<Map<String, String>>> pumpHome(
   List<String>? mostPlayed = const ['Pump', 'Toys in the Attic'],
   List<String> latest = const ['Night in the Ruts'],
   bool television = false,
+  bool railCollapsed = false,
+  ValueChanged<bool>? onRailCollapsed,
 }) async {
   const credentials = SubsonicCredentials(username: 'a', token: 't', salt: 's');
   final asked = <Map<String, String>>[];
@@ -90,7 +92,7 @@ Future<List<Map<String, String>>> pumpHome(
         services: services,
         child: DirectionalNavigation(enabled: television, child: child!),
       ),
-      home: HomePage(onSignOut: () {}),
+      home: HomePage(onSignOut: () {}, railCollapsed: railCollapsed, onRailCollapsed: onRailCollapsed),
     ),
   );
   await tester.pumpAndSettle();
@@ -101,6 +103,16 @@ Future<List<Map<String, String>>> pumpHome(
 final rows = find.byWidgetPredicate((widget) => widget is ListView && widget.scrollDirection == Axis.horizontal);
 
 Finder title(String text) => find.descendant(of: find.byType(AppBar), matching: find.text(text));
+
+/// A section's name in the side rail, where it shows.
+Finder railLabel(String text) =>
+    find.descendant(of: find.byType(NavigationRail), matching: find.text(text)).hitTestable();
+
+/// A text, where it shows.
+Finder shown(String text) => find.text(text).hitTestable();
+
+/// Where the side rail ends: the line between it and the section.
+double railWidth(WidgetTester tester) => tester.getTopLeft(find.byType(VerticalDivider)).dx;
 
 /// The name of the album that has the focus.
 String? focusedAlbum() =>
@@ -135,6 +147,74 @@ void main() {
     expect(title('Pump'), findsOneWidget);
     expect(find.text('Love in an Elevator'), findsOneWidget);
     await tester.pumpWidget(const SizedBox()); // stops the player bar's timers
+  });
+
+  testWidgets('a button collapses the side rail to its icons, which still go to their sections, and expands it again', (
+    tester,
+  ) async {
+    final collapsed = <bool>[];
+    await pumpHome(tester, const Size(1000, 700), onRailCollapsed: collapsed.add);
+    final width = railWidth(tester);
+    expect(railLabel('Álbuns'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Recolher a barra lateral'));
+    await tester.pumpAndSettle();
+    expect(shown('Início'), findsOneWidget, reason: 'only the title');
+    expect(shown('Álbuns'), findsNothing);
+    expect(shown('Artistas'), findsNothing);
+    expect(railWidth(tester), lessThan(width));
+    expect(collapsed, [true]);
+
+    await tester.tap(find.byTooltip('Álbuns'));
+    await tester.pumpAndSettle();
+    expect(title('Álbuns'), findsOneWidget);
+    expect(find.byIcon(Icons.album), findsOneWidget, reason: 'selected');
+    expect(find.byIcon(Icons.home_outlined), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Expandir a barra lateral'));
+    await tester.pumpAndSettle();
+    expect(railLabel('Início'), findsOneWidget);
+    expect(railWidth(tester), width);
+    expect(collapsed, [true, false]);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'collapsed, the side rail\'s sections are buttons no bigger than their icons\' highlight, named on hover',
+    (tester) async {
+      await pumpHome(tester, const Size(1000, 700), railCollapsed: true);
+
+      for (final section in ['Início', 'Álbuns', 'Artistas']) {
+        final button = find.descendant(
+          of: find.byTooltip(section),
+          matching: find.byWidgetPredicate((widget) => widget is InkResponse),
+        );
+        expect(tester.getSize(button), const Size(40, 40), reason: section);
+      }
+
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('the side rail opens collapsed when the user left it so', (tester) async {
+    await pumpHome(tester, const Size(1000, 700), railCollapsed: true);
+    expect(shown('Álbuns'), findsNothing);
+    expect(find.byTooltip('Expandir a barra lateral'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('on a TV, the button that collapses and expands the side rail keeps the focus', (tester) async {
+    await pumpHome(tester, const Size(960, 540), television: true);
+    Focus.of(tester.element(find.byIcon(Icons.menu_open))).requestFocus();
+    await tester.pump();
+    await press(tester, LogicalKeyboardKey.enter);
+    expect(shown('Álbuns'), findsNothing);
+    expect(Focus.of(tester.element(find.byIcon(Icons.menu))).hasFocus, isTrue);
+
+    await press(tester, LogicalKeyboardKey.enter);
+    expect(railLabel('Álbuns'), findsOneWidget);
+    expect(Focus.of(tester.element(find.byIcon(Icons.menu_open))).hasFocus, isTrue);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('on a phone, a row goes on sideways', (tester) async {

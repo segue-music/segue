@@ -14,9 +14,15 @@ import 'now_playing_bar.dart';
 import 'search_results.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({required this.onSignOut, super.key});
+  const HomePage({required this.onSignOut, this.railCollapsed = false, this.onRailCollapsed, super.key});
 
   final VoidCallback onSignOut;
+
+  /// Whether the side rail starts with only its icons.
+  final bool railCollapsed;
+
+  /// Called when the user collapses (true) or expands (false) the side rail.
+  final ValueChanged<bool>? onRailCollapsed;
 
   /// How long typing in the search bar has to stop before the search goes out, so that it isn't one
   /// per key.
@@ -52,6 +58,13 @@ class _HomePageState extends State<HomePage> {
   /// The sections opened so far: each loads the first time it is opened.
   final _opened = {_Section.home};
 
+  /// Whether the side rail shows only its icons.
+  late bool _railCollapsed = widget.railCollapsed;
+
+  /// The button that collapses and expands the side rail, the same in either, so that it keeps the
+  /// focus.
+  final _railToggle = GlobalKey();
+
   void _select(int index) {
     final section = _Section.values[index];
     setState(() {
@@ -62,6 +75,11 @@ class _HomePageState extends State<HomePage> {
     if (_results != null) {
       _clearSearch();
     }
+  }
+
+  void _toggleRail() {
+    setState(() => _railCollapsed = !_railCollapsed);
+    widget.onRailCollapsed?.call(_railCollapsed);
   }
 
   void _typed(String text) {
@@ -117,6 +135,12 @@ class _HomePageState extends State<HomePage> {
       onChanged: _typed,
       onSubmitted: _searchFor,
     );
+    final railToggle = IconButton(
+      key: _railToggle,
+      tooltip: _railCollapsed ? 'Expandir a barra lateral' : 'Recolher a barra lateral',
+      icon: Icon(_railCollapsed ? Icons.menu : Icons.menu_open),
+      onPressed: _toggleRail,
+    );
     // Next to the title when there is room for both; on a phone, on a line of its own under it.
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final sections = Stack(
@@ -164,19 +188,23 @@ class _HomePageState extends State<HomePage> {
           ? sections
           : Row(
               children: [
-                NavigationRail(
-                  selectedIndex: _section.index,
-                  onDestinationSelected: _select,
-                  labelType: NavigationRailLabelType.all,
-                  destinations: [
-                    for (final section in _Section.values)
-                      NavigationRailDestination(
-                        icon: Icon(section.icon),
-                        selectedIcon: Icon(section.selectedIcon),
-                        label: Text(section.label),
-                      ),
-                  ],
-                ),
+                if (_railCollapsed)
+                  _CollapsedRail(toggle: railToggle, selected: _section, onSelected: _select)
+                else
+                  NavigationRail(
+                    selectedIndex: _section.index,
+                    onDestinationSelected: _select,
+                    labelType: NavigationRailLabelType.all,
+                    leading: railToggle,
+                    destinations: [
+                      for (final section in _Section.values)
+                        NavigationRailDestination(
+                          icon: Icon(section.icon),
+                          selectedIcon: Icon(section.selectedIcon),
+                          label: Text(section.label),
+                        ),
+                    ],
+                  ),
                 const VerticalDivider(width: 1),
                 Expanded(child: sections),
               ],
@@ -201,6 +229,54 @@ class _HomePageState extends State<HomePage> {
               ],
             )
           : const NowPlayingBar(),
+    );
+  }
+}
+
+/// The side rail collapsed to its sections' icons, each named by its tooltip. NavigationRail's own
+/// highlight is as wide collapsed as expanded; here it is the icon's button's.
+class _CollapsedRail extends StatelessWidget {
+  const _CollapsedRail({required this.toggle, required this.selected, required this.onSelected});
+
+  /// The button that expands the rail.
+  final Widget toggle;
+
+  final _Section selected;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    // NavigationRail's colors: the selected section on a tint.
+    final style = ButtonStyle(
+      backgroundColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected) ? colors.secondaryContainer : null,
+      ),
+      foregroundColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected) ? colors.onSecondaryContainer : colors.onSurfaceVariant,
+      ),
+    );
+    return SizedBox(
+      width: 56,
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          toggle,
+          const SizedBox(height: 8),
+          for (final section in _Section.values)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: IconButton(
+                tooltip: section.label,
+                isSelected: section == selected,
+                icon: Icon(section.icon),
+                selectedIcon: Icon(section.selectedIcon),
+                style: style,
+                onPressed: () => onSelected(section.index),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
