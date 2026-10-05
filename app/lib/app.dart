@@ -7,6 +7,7 @@ import 'session.dart';
 import 'ui/home_page.dart';
 import 'ui/login_page.dart';
 import 'ui/shortcuts.dart';
+import 'ui/spinner.dart';
 import 'ui/theme.dart';
 
 class SegueApp extends StatefulWidget {
@@ -98,7 +99,7 @@ class _SegueAppState extends State<SegueApp> {
       home: services != null
           ? HomePage(onSignOut: _signOut)
           : _starting
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+          ? const Scaffold(body: Center(child: Spinner()))
           : _error != null
           ? Scaffold(
               body: Center(

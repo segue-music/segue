@@ -6,6 +6,7 @@ import 'cover.dart';
 import 'current_song.dart';
 import 'errors.dart';
 import 'now_playing_bar.dart';
+import 'spinner.dart';
 
 class AlbumPage extends StatefulWidget {
   const AlbumPage(this.album, {super.key});
@@ -42,7 +43,7 @@ class _AlbumPageState extends State<AlbumPage> {
         builder: (context, snapshot) {
           if (snapshot.hasError) return Center(child: Text('Não consegui abrir o álbum: ${snapshot.error}'));
           final data = snapshot.data;
-          if (data == null) return const Center(child: CircularProgressIndicator());
+          if (data == null) return const Center(child: Spinner());
           final (album, songs) = data;
           return ListView(
             children: [

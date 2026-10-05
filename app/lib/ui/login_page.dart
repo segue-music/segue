@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import '../server/server.dart';
 import '../server/sign_in.dart';
 import '../session.dart';
+import 'spinner.dart';
 
 /// Server, user and password: the media server's own account, nothing else to create. Whether the
 /// server speaks Subsonic or Jellyfin, the app finds out.
@@ -144,9 +145,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _busy ? null : _submit,
-                    child: _busy
-                        ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Entrar'),
+                    child: _busy ? const Spinner(size: 20, strokeWidth: 2.5) : const Text('Entrar'),
                   ),
                 ],
               ),

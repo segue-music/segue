@@ -7,6 +7,7 @@ import '../server/models.dart';
 import '../server/server.dart';
 import '../services.dart';
 import 'albums_view.dart';
+import 'spinner.dart';
 
 /// How many albums a row shows at most.
 const _limit = 20;
@@ -134,7 +135,7 @@ class _AlbumRowState extends State<_AlbumRow> {
             if (albums == null) {
               return const SizedBox(
                 height: _AlbumRow._height,
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: Spinner()),
               );
             }
             if (albums.isEmpty) return note(widget.empty);

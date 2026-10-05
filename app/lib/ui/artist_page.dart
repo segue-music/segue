@@ -6,6 +6,7 @@ import 'albums_view.dart';
 import 'artists_view.dart';
 import 'cover.dart';
 import 'now_playing_bar.dart';
+import 'spinner.dart';
 
 /// An artist and their albums, newest first.
 class ArtistPage extends StatefulWidget {
@@ -36,7 +37,7 @@ class _ArtistPageState extends State<ArtistPage> {
         builder: (context, snapshot) {
           if (snapshot.hasError) return Center(child: Text('Não consegui abrir o artista: ${snapshot.error}'));
           final data = snapshot.data;
-          if (data == null) return const Center(child: CircularProgressIndicator());
+          if (data == null) return const Center(child: Spinner());
           final (artist, albums) = data;
           final newestFirst = [...albums]..sort((a, b) => (b.year ?? 0).compareTo(a.year ?? 0));
           return AlbumGrid(

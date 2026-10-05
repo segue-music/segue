@@ -8,6 +8,7 @@ import '../services.dart';
 import 'album_page.dart';
 import 'cover.dart';
 import 'focus_ring.dart';
+import 'spinner.dart';
 
 /// The library's albums, by name, a page at a time: the next as the grid nears its end.
 class AlbumsView extends StatefulWidget {
@@ -94,7 +95,7 @@ class _AlbumsViewState extends State<AlbumsView> {
     final error = _error;
     if (_albums.isEmpty) {
       if (error != null) return Center(child: _Retry('Não consegui listar os álbuns: $error', onRetry: _retry));
-      if (!_done) return const Center(child: CircularProgressIndicator());
+      if (!_done) return const Center(child: Spinner());
     }
     return NotificationListener<Notification>(
       onNotification: _scrolled,
@@ -107,7 +108,7 @@ class _AlbumsViewState extends State<AlbumsView> {
               : _loading
               ? const Padding(
                   padding: EdgeInsets.only(bottom: 16),
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(child: Spinner()),
                 )
               : null,
         ),

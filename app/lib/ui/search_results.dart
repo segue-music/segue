@@ -9,6 +9,7 @@ import 'cover.dart';
 import 'current_song.dart';
 import 'errors.dart';
 import 'now_playing_bar.dart';
+import 'spinner.dart';
 
 /// What a search found: artists and albums, which open their page, and songs, which play.
 class SearchResultsList extends StatelessWidget {
@@ -28,7 +29,7 @@ class SearchResultsList extends StatelessWidget {
     builder: (context, snapshot) {
       if (snapshot.hasError) return Center(child: Text('Não consegui buscar: ${snapshot.error}'));
       final results = snapshot.data;
-      if (results == null) return const Center(child: CircularProgressIndicator());
+      if (results == null) return const Center(child: Spinner());
       final (:artists, :albums, :songs) = results;
       if (artists.isEmpty && albums.isEmpty && songs.isEmpty) return const Center(child: Text('Nada encontrado.'));
       return ListView(

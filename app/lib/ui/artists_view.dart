@@ -5,6 +5,7 @@ import '../services.dart';
 import 'artist_page.dart';
 import 'cover.dart';
 import 'focus_ring.dart';
+import 'spinner.dart';
 
 /// "1 álbum", "5 álbuns"; empty when the server didn't say.
 String albumCount(int? count) => switch (count) {
@@ -36,7 +37,7 @@ class _ArtistsViewState extends State<ArtistsView> {
     builder: (context, snapshot) {
       if (snapshot.hasError) return Center(child: Text('Não consegui listar os artistas: ${snapshot.error}'));
       final artists = snapshot.data;
-      if (artists == null) return const Center(child: CircularProgressIndicator());
+      if (artists == null) return const Center(child: Spinner());
       return RefreshIndicator(
         onRefresh: () async {
           final reload = ServicesScope.of(context).api.artists();

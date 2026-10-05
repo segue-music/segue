@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:segue/app.dart';
 import 'package:segue/jellyfin/api.dart';
 import 'package:segue/session.dart';
 import 'package:segue/ui/login_page.dart';
+import 'package:segue/ui/spinner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
@@ -76,6 +78,28 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pump();
     expect(focused(tester, 'Usuário'), isTrue);
+  });
+
+  testWidgets('while it signs in, the button spins and can\'t be pressed again', (tester) async {
+    final answer = Completer<http.Response>();
+    final client = MockClient((_) => answer.future);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LoginPage(onSignedIn: (_) {}, client: client),
+      ),
+    );
+    await tester.enterText(find.widgetWithText(TextFormField, 'Servidor'), 'music.test');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Usuário'), 'alice');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Senha'), 'sesame');
+    await tester.tap(find.text('Entrar'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.descendant(of: find.byType(FilledButton), matching: find.byType(Spinner)), findsOneWidget);
+    expect(find.text('Entrar'), findsNothing);
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNull);
+    answer.complete(http.Response('<!doctype html>', 200));
+    await tester.pumpAndSettle();
+    expect(find.byType(Spinner), findsNothing);
+    expect(find.text('Entrar'), findsOneWidget);
   });
 
   testWidgets('a Jellyfin server is found by its address alone, and signed in to', (tester) async {
