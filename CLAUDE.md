@@ -4,15 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Segue is a draft "Connect" protocol (like Spotify Connect) for OpenSubsonic/Jellyfin music apps,
-plus its reference hub:
+Segue is a draft "Connect" protocol for OpenSubsonic/Jellyfin music apps, plus its reference hub:
 
 - `SPEC.md`: the protocol. Where it and the protocol code disagree, one of them has a bug, so a
   protocol change touches `SPEC.md`, the hub (`hub/`) and the app's Dart side together. Code
   comments cite it by section ("SPEC.md, section 4").
 - `hub/`: the reference hub in Go (package `hub`, usable as a library; binary in `cmd/segue-hub`).
 
-The first real client, a Spotify-like Flutter player for Navidrome and Jellyfin, is in another
+The first real client, a Flutter music player for Navidrome and Jellyfin, is in another
 repository, `github.com/segue-music/segue-app`, usually cloned next to this one as
 `../segue-app`. Its side of the protocol is in its `lib/segue/`, so a protocol change is a commit
 in each repository. It lived here in `app/` until 2026-10-05, and took its history along.

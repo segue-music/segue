@@ -2,13 +2,13 @@
 
 <h1 align="center">Segue</h1>
 
-<h3 align="center">Spotify Connect for self-hosted music.</h3>
+<h3 align="center">Connect for self-hosted music.</h3>
 
 <p align="center">
   Each of your devices sees what the others are playing, controls any of them, and moves the music
   from one to another without losing its place, across apps and servers. A draft of an open
   protocol for apps on OpenSubsonic (Navidrome and others) or Jellyfin, a reference hub that runs
-  next to the media server, and a Spotify-like player built on them.
+  next to the media server, and a music player built on them.
 </p>
 
 <p align="center">
@@ -45,7 +45,7 @@ The hub is in Go, the language of Navidrome, so that it can move into a media se
 uses the same WebSocket library as Navidrome (`gorilla/websocket`). As a separate service it is
 one static binary: an 11 MB image, using about 2 MB of RAM when idle.
 
-The app, a Spotify-like player for Navidrome, other OpenSubsonic servers and Jellyfin in Flutter
+The app, a music player for Navidrome, other OpenSubsonic servers and Jellyfin in Flutter
 (Linux, Windows, macOS, Android, iOS), is in its own repository,
 [segue-music/segue-app](https://github.com/segue-music/segue-app), with its side of the
 protocol in Dart (`lib/segue/`). It lived here, in `app/`, until 2026-10-05. A client in another

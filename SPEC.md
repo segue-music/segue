@@ -7,8 +7,8 @@ code disagree, that is a bug in one of them.
 
 ## The problem
 
-Spotify Connect lets every device see what plays on the others, control any of them, and move the
-music from one to another. Self-hosted music has nothing like it across apps:
+Self-hosted music has no way, across apps, for every device to see what plays on the others,
+control any of them, and move the music from one to another:
 
 - The **Subsonic/OpenSubsonic API** is request and response: the server never speaks first, so it
   can't tell an app to do anything. `jukeboxControl` drives a single output on the server and few
@@ -197,11 +197,11 @@ devices. Any device computes where playback is now as `positionMs + (hubNow - at
 where `hubNow` is the local time plus the offset measured at `welcome` (`serverTime` minus the local
 time). Nobody depends on device clocks being right.
 
-**One device plays at a time**, as with Spotify: when a player's report goes from not playing to
-`playing`, the hub sends `stop` to the user's other players that are playing (`pause` to one that
-takes no `stop`), as a command from the device that started. The music has moved, and they are left
-idle, not paused with it. Reports from a device that already plays (a new track, say) don't do it
-again. Every app then sees, and follows, the one device that plays.
+**One device plays at a time**: when a player's report goes from not playing to `playing`, the hub
+sends `stop` to the user's other players that are playing (`pause` to one that takes no `stop`),
+as a command from the device that started. The music has moved, and they are left idle, not
+paused with it. Reports from a device that already plays (a new track, say) don't do it again.
+Every app then sees, and follows, the one device that plays.
 
 ## 5. Commands
 
@@ -256,8 +256,8 @@ which is "continue here".
 ## 7. Last playback
 
 The hub keeps, for each user, the **last playback**: the state of the device that played last, so
-that an app opened after every app was closed can show where the music was, Spotify-style. It is
-the hub's own record, separate from the devices' states:
+that an app opened after every app was closed can show where the music was. It is the hub's own
+record, separate from the devices' states:
 
 - a device takes it over only by reporting `playing` with a queue; the device that holds it also
   updates it while paused (a seek, say);
@@ -379,7 +379,6 @@ Navidrome's Jellyfin API counts a play when a track stops past half of it or fou
 
 ## Related work
 
-- Spotify Connect: the model, closed.
 - Jellyfin sessions, remote control and SyncPlay.
 - Subsonic `jukeboxControl`, and the OpenSubsonic Playback Report extension.
 - Music Assistant, and its Sendspin protocol for players.
