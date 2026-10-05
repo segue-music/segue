@@ -3,7 +3,6 @@ package hub
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -36,29 +35,25 @@ func (h *Hub) Handler(info map[string]any) http.Handler {
 	fields["protocol"], fields["versions"] = "segue", []int{ProtocolVersion}
 	infoJSON, _ := json.Marshal(fields)
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		if strings.HasPrefix(path, "/connect/") {
-			path = strings.TrimPrefix(path, "/connect")
+	serveInfo := func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(infoJSON)
+	}
+	serveWS := func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return // Upgrade has already answered with the error
 		}
-		switch path {
-		case "/v1/info":
-			if r.Method != http.MethodGet && r.Method != http.MethodHead {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write(infoJSON)
-		case "/v1/ws":
-			ws, err := upgrader.Upgrade(w, r, nil)
-			if err != nil {
-				return // Upgrade has already answered with the error
-			}
-			h.serve(r, ws)
-		default:
-			http.NotFound(w, r)
-		}
-	})
+		h.serve(r, ws)
+	}
+	mux := http.NewServeMux()
+	for _, prefix := range []string{"", "/connect"} {
+		// GET also takes HEAD, and the mux answers other methods with a 405 and Allow. The
+		// WebSocket has no method: Upgrade answers whatever isn't a handshake.
+		mux.HandleFunc("GET "+prefix+"/v1/info", serveInfo)
+		mux.HandleFunc(prefix+"/v1/ws", serveWS)
+	}
+	return mux
 }
 
 // serve runs one connection: a goroutine writes (messages and pings), this one reads.

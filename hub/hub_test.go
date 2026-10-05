@@ -559,6 +559,33 @@ func TestInfoEndpoint(t *testing.T) {
 	}
 }
 
+func TestRoutes(t *testing.T) {
+	h := New(Options{Authenticate: byUsername})
+	for _, tc := range []struct {
+		method, path string
+		code         int
+		allow        string
+	}{
+		{"HEAD", "/v1/info", 200, ""},
+		{"HEAD", "/connect/v1/info", 200, ""},
+		{"POST", "/v1/info", 405, "GET, HEAD"},
+		{"POST", "/connect/v1/info", 405, "GET, HEAD"},
+		{"GET", "/v1/other", 404, ""},
+		{"GET", "/connect/connect/v1/info", 404, ""}, // the prefix is taken off once
+		{"GET", "/", 404, ""},
+	} {
+		w := httptest.NewRecorder()
+		h.Handler(nil).ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+		if w.Code != tc.code || w.Header().Get("Allow") != tc.allow {
+			t.Errorf("%s %s: %d, Allow %q", tc.method, tc.path, w.Code, w.Header().Get("Allow"))
+		}
+	}
+
+	// The WebSocket under /connect/, where it sits on the media server's origin.
+	url, _ := startHub(t, Options{})
+	join(t, strings.Replace(url, "/v1/ws", "/connect/v1/ws", 1), as("alice"), info("tv", Subsonic, player))
+}
+
 func TestLastPlayback(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	path := filepath.Join(t.TempDir(), "last.json")
