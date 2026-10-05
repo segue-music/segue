@@ -9,7 +9,7 @@ import 'protocol.dart';
 /// null when there is none. [hub], when given, is the hub's own address, typed by the user.
 Future<Uri?> discoverHub(Uri server, {Uri? hub, http.Client? client}) async {
   final candidates = hub != null ? [hub] : [server, if (server.path.length > 1) server.replace(path: '/')];
-  final http_ = client ?? http.Client();
+  final httpClient = client ?? http.Client();
 
   try {
     for (final base in candidates) {
@@ -18,7 +18,7 @@ Future<Uri?> discoverHub(Uri server, {Uri? hub, http.Client? client}) async {
       final root = base.path.endsWith('/') ? base : base.replace(path: '${base.path}/');
 
       try {
-        final response = await http_.get(root.resolve('connect/v1/info')).timeout(const Duration(seconds: 3));
+        final response = await httpClient.get(root.resolve('connect/v1/info')).timeout(const Duration(seconds: 3));
 
         if (response.statusCode != 200) {
           continue;
@@ -40,7 +40,7 @@ Future<Uri?> discoverHub(Uri server, {Uri? hub, http.Client? client}) async {
     return null;
   } finally {
     if (client == null) {
-      http_.close();
+      httpClient.close();
     }
   }
 }

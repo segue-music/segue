@@ -3,8 +3,24 @@ include: package:flutter_lints/flutter.yaml
 linter:
   rules:
     - always_put_control_body_on_new_line
+    # The guidelines of Effective Dart's design page (https://dart.dev/effective-dart/design) that
+    # flutter_lints leaves off.
+    - avoid_classes_with_only_static_members
+    - avoid_equals_and_hash_code_on_mutable_classes
+    - avoid_returning_this
+    - avoid_setters_without_getters
+    - avoid_types_on_closure_parameters
+    - avoid_void_async
+    - omit_local_variable_types
+    - prefer_mixin
+    - type_annotate_public_apis
+    - use_setters_to_change_properties
+    - use_to_and_as_if_applicable
 
 analyzer:
+  language:
+    strict-inference: true
+    strict-raw-types: true
   exclude:
     - build/**
     - android/**

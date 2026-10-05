@@ -25,12 +25,12 @@ class NotAMediaServer implements Exception {
 /// when it can't be asked. A ping that fails throws right away: Jellyfin is at the same address, so
 /// asking it would only fail again, after another timeout.
 Future<Api> detectApi(Uri server, {http.Client? client}) async {
-  final http_ = client ?? http.Client();
+  final httpClient = client ?? http.Client();
   final base = server.path.endsWith('/') ? server : server.replace(path: '${server.path}/');
 
   try {
     final ping = await _json(
-      http_,
+      httpClient,
       base.resolve('rest/ping.view').replace(queryParameters: {'v': '1.16.1', 'c': clientName, 'f': 'json'}),
     );
 
@@ -38,14 +38,14 @@ Future<Api> detectApi(Uri server, {http.Client? client}) async {
       return Api.subsonic;
     }
 
-    final info = await _json(http_, base.resolve('System/Info/Public'));
+    final info = await _json(httpClient, base.resolve('System/Info/Public'));
 
     if (info is Map && info['Id'] is String) {
       return Api.jellyfin;
     }
   } finally {
     if (client == null) {
-      http_.close();
+      httpClient.close();
     }
   }
 

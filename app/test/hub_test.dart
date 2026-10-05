@@ -27,7 +27,7 @@ const songs = [
 
 late Process hub;
 late Uri hubUrl;
-var users = 0;
+int users = 0;
 
 /// One app: a fake engine, the player, the hub client and the Connect controller.
 class App {

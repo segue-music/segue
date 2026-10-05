@@ -34,10 +34,10 @@ class JellyfinApi implements MediaServer {
     required String deviceName,
     http.Client? client,
   }) async {
-    final http_ = client ?? http.Client();
+    final httpClient = client ?? http.Client();
 
     try {
-      final response = await http_.post(
+      final response = await httpClient.post(
         _withSlash(server).resolve('Users/AuthenticateByName'),
         headers: {'Authorization': _authorization(deviceId, deviceName), 'Content-Type': 'application/json'},
         body: jsonEncode({'Username': username, 'Pw': password}),
@@ -53,11 +53,11 @@ class JellyfinApi implements MediaServer {
         ),
         deviceId: deviceId,
         deviceName: deviceName,
-        client: http_,
+        client: httpClient,
       );
     } on Object {
       if (client == null) {
-        http_.close();
+        httpClient.close();
       }
 
       rethrow;

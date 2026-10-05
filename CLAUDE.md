@@ -181,6 +181,13 @@ Running two app instances on one machine as different devices:
   blank line before and after it, separating it from the statements around it, but not at the
   start or end of its block. A comment above the statement belongs to it, so the blank line goes
   above the comment. `dart format` keeps blank lines but never adds them, so this is by hand.
+- Dart design follows Effective Dart's guidelines (https://dart.dev/effective-dart/design). The ones
+  a lint can check are on in `analysis_options.yaml`; the rest (terms used consistently, no
+  abbreviations, noun phrases for values, verbs for side effects, no `get` prefix, ...) are by hand.
+  `avoid_positional_boolean_parameters` stays off: the guideline exempts setters, and a method like
+  `setShuffle(true)` is one that can't be a setter, being async.
+- No name ends in `_`: when the obvious one is taken, as by an import prefix (`http`), pick a fuller
+  one (`httpClient`). A leading `_` is Dart's privacy, not style, and stays.
 - Docs, comments and tests stay generic: no names from a particular setup (machine or device names,
   hostnames, server paths, the tooling of the server it is developed on). Use names like `laptop`,
   `phone`, `tv` and `music.example`.
