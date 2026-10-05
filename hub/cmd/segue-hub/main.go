@@ -26,24 +26,19 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	kind := hub.UpstreamKind(os.Getenv("SEGUE_UPSTREAM_KIND"))
-	if kind != "" && kind != hub.KindNavidrome && kind != hub.KindSubsonic && kind != hub.KindJellyfin {
-		fail("SEGUE_UPSTREAM_KIND must be navidrome, subsonic or jellyfin", "got", kind)
-	}
 	upstream := os.Getenv("SEGUE_UPSTREAM")
 	devAuth := os.Getenv("SEGUE_AUTH") == "none"
 	if upstream == "" && !devAuth {
 		fail("SEGUE_UPSTREAM is required (the media server's URL)")
 	}
-	if kind == "" && upstream == "" {
-		kind = hub.KindNavidrome // SEGUE_AUTH=none with no media server: nothing to ask
-	} else if kind == "" {
+	kind := hub.KindNavidrome // SEGUE_AUTH=none with no media server: nothing to ask
+	if upstream != "" {
 		var err error
 		kind, err = detectUpstream(ctx, log, upstream)
 		if ctx.Err() != nil {
 			return
 		} else if err != nil {
-			fail("can't tell what the media server is: set SEGUE_UPSTREAM_KIND", "upstream", upstream, "err", err)
+			fail("SEGUE_UPSTREAM is not a Navidrome, Subsonic or Jellyfin server", "upstream", upstream, "err", err)
 		}
 		log.Info("media server found", "upstream", upstream, "kind", kind)
 	}
