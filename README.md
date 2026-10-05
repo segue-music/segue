@@ -1,4 +1,4 @@
-<p align="center"><img src="app/linux/runner/resources/app_icon.png" alt="" width="128"></p>
+<p align="center"><img src="icon.png" alt="" width="128"></p>
 
 <h1 align="center">Segue</h1>
 
@@ -14,7 +14,7 @@
 <p align="center">
   <a href="SPEC.md">Protocol</a> ·
   <a href="#hub">Hub</a> ·
-  <a href="app/README.md">App</a> ·
+  <a href="https://github.com/mateusguilherme/segue-app">App</a> ·
   <a href="#next-steps">Next steps</a>
 </p>
 
@@ -31,7 +31,8 @@ each player, and routes commands. Audio still comes from the media server. The p
 and the messages are in [SPEC.md](SPEC.md).
 
 **Status: skeleton.** The protocol is a first draft. The hub works in its tests and with the
-first client, an app of its own (`app/`); both have run next to a real Navidrome since 2026-10-03.
+first client, an app of its own ([segue-app](https://github.com/mateusguilherme/segue-app)); both
+have run next to a real Navidrome since 2026-10-03.
 
 ## Layout
 
@@ -39,15 +40,17 @@ first client, an app of its own (`app/`); both have run next to a real Navidrome
 |---|---|
 | `SPEC.md` | The protocol |
 | `hub/` | The reference hub, in Go. Package `hub` (usable as a library), binary in `cmd/segue-hub` |
-| `app/` | A Spotify-like player for Navidrome, other OpenSubsonic servers and Jellyfin, built on Segue, in Flutter (Linux, Windows, macOS, Android, iOS). See [app/README.md](app/README.md) |
 
 The hub is in Go, the language of Navidrome, so that it can move into a media server. It also
 uses the same WebSocket library as Navidrome (`gorilla/websocket`). As a separate service it is
 one static binary: an 11 MB image, using about 2 MB of RAM when idle.
 
-The app's side of the protocol is in Dart (`app/lib/segue/`). A client in another language follows
-`SPEC.md`. A reference client in TypeScript, for apps like Feishin and Jellify, lived in `client/`
-until 2026-10-03: `git checkout c22dc7b -- client` brings it back.
+The app, a Spotify-like player for Navidrome, other OpenSubsonic servers and Jellyfin in Flutter
+(Linux, Windows, macOS, Android, iOS), is in its own repository,
+[mateusguilherme/segue-app](https://github.com/mateusguilherme/segue-app), with its side of the
+protocol in Dart (`lib/segue/`). It lived here, in `app/`, until 2026-10-05. A client in another
+language follows `SPEC.md`. A reference client in TypeScript, for apps like Feishin and Jellify,
+lived in `client/` until 2026-10-03: `git checkout c22dc7b -- client` brings it back.
 
 ## Hub
 
@@ -82,7 +85,7 @@ listens on `0.0.0.0:8480`.
 ## Next steps
 
 1. The app: playlists, editing the queue (play next, add to it), and trying the iOS build on an
-   iPhone and in a car (see [app/README.md](app/README.md)).
+   iPhone and in a car (see [segue-app](https://github.com/mateusguilherme/segue-app)).
 2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`, leaving out what
    the hub reports itself), as devices that can be seen but not commanded. That covers apps like
    Symfonium, which is closed source.
