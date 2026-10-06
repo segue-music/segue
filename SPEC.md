@@ -117,8 +117,9 @@ Subsonic's plain-password form (`p=`) is not accepted.
 - `capabilities`: the commands it obeys as a player ([section 5](#5-commands)). The hub ignores
   the ones it doesn't know, and so should apps, so that a newer app still works with an older hub.
 - `reportsPlayback` (optional): `true` when the app tells the media server what it plays by itself
-  (`scrobble`, `reportPlayback`), so that the hub doesn't do it for it
-  ([section 12](#12-the-media-servers-now-playing)).
+  (`reportPlayback`, or `scrobble`'s now playing), so that the hub doesn't do it for it
+  ([section 12](#12-the-media-servers-now-playing)). Counting plays is apart: an app that only
+  counts them leaves it out.
 
 The hub answers with `welcome`:
 
@@ -353,9 +354,13 @@ so that music playing through Segue shows there under the name of the device tha
   itself, as most Jellyfin apps do.
 
 Plays are counted as each API counts them. In the Subsonic API the hub counts none
-(`ignoreScrobble`). Jellyfin counts one on each `Sessions/Playing`, so the hub sends it only for a
-track that starts playing from its start, and `Sessions/Playing/Progress` for one that it hears of
-later (moved from another device, or the device back online), which shows it without counting.
+(`ignoreScrobble`): the device that plays a track counts it itself, with `scrobble` and
+`submission=true`, which shows nothing in the now playing. It counts by how long the track played
+there (half of it, or four minutes, as Last.fm counts), not by where it got to, so that a track moved
+by a transfer counts on a device only for what that device played. Jellyfin counts one on each
+`Sessions/Playing`, so the hub sends it only for a track that starts playing from its start, and
+`Sessions/Playing/Progress` for one that it hears of later (moved from another device, or the device
+back online), which shows it without counting.
 Navidrome's Jellyfin API counts a play when a track stops past half of it or four minutes
 ([open questions](#13-open-questions)).
 
@@ -375,7 +380,7 @@ Navidrome's Jellyfin API counts a play when a track stops past half of it or fou
 - Counting plays from the hub in the Subsonic API. The server counts a track when a report says it
   stopped past half of it, so a track moved by a transfer, which stops on one device and ends on
   another, would count twice. Navidrome's Jellyfin API counts the same way, so there a transfer past
-  half of a track counts it twice already.
+  half of a track counts it twice already. Until then, devices count their own (section 12).
 
 ## Related work
 
