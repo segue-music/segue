@@ -189,8 +189,6 @@ func (d *testDevice) report(state map[string]any) {
 	d.send(map[string]any{"type": "state", "state": state})
 }
 
-func ptr[T any](v T) *T { return &v }
-
 var songs = []map[string]any{
 	{"id": "c032d12530e3c18d843d13651f9689ac", "title": "Dream On", "durationMs": 268000},
 	{"id": "ffffffffffffffffffffffffffffffff", "title": "Other", "durationMs": 200000},
@@ -386,16 +384,16 @@ func TestCommands(t *testing.T) {
 			t.Errorf("%s %v: got %+v, want %s", c.target, c.command, r, c.want)
 		}
 	}
+drain:
 	for {
 		select {
 		case msg := <-speaker.msgs:
 			if msg.Type == "command" {
 				t.Fatal("the speaker got a command it doesn't obey")
 			}
-			continue
 		default:
+			break drain
 		}
-		break
 	}
 }
 
@@ -492,16 +490,16 @@ func TestReconnectReplacesTheOldConnection(t *testing.T) {
 		t.Fatalf("result %+v", r)
 	}
 	// The old connection's close must not have marked the device offline.
+quiet:
 	for {
 		select {
 		case msg := <-pc.msgs:
 			if msg.Type == "device" && !msg.Device.Online {
 				t.Fatal("the device went offline")
 			}
-			continue
 		case <-time.After(100 * time.Millisecond):
+			break quiet
 		}
-		break
 	}
 }
 
@@ -557,6 +555,15 @@ func TestInfoEndpoint(t *testing.T) {
 	if w.Code != 404 {
 		t.Errorf("/connectx/v1/info: %d", w.Code)
 	}
+}
+
+func TestInfoThatIsntJSON(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("Handler took info that doesn't encode as JSON")
+		}
+	}()
+	New(Options{Authenticate: byUsername}).Handler(map[string]any{"server": func() {}})
 }
 
 func TestRoutes(t *testing.T) {

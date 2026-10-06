@@ -14,20 +14,26 @@ const ProtocolVersion = 1
 // API is the media server API a device speaks. Item ids in its messages belong to that API.
 type API string
 
+// The APIs a device can speak.
 const (
 	Subsonic API = "subsonic"
 	Jellyfin API = "jellyfin"
 )
 
+// Role is what a device does: a player plays and obeys commands, a controller sends them. A device
+// can be both.
 type Role string
 
+// The roles a device can take.
 const (
 	RolePlayer     Role = "player"
 	RoleController Role = "controller"
 )
 
+// Status is a player's playback status. A stopped player is idle, whether or not it has a queue.
 type Status string
 
+// The statuses a player reports.
 const (
 	Playing Status = "playing"
 	Paused  Status = "paused"
@@ -38,6 +44,7 @@ const (
 // current track.
 type Repeat string
 
+// The repeat modes.
 const (
 	RepeatOff Repeat = "off"
 	RepeatAll Repeat = "all"
@@ -46,8 +53,11 @@ const (
 
 func (r Repeat) valid() bool { return r == RepeatOff || r == RepeatAll || r == RepeatOne }
 
+// Action is what a command asks of a player (SPEC.md, section 5). A player lists the ones it obeys
+// in DeviceInfo.Capabilities.
 type Action string
 
+// The actions of commands.
 const (
 	ActPlay       Action = "play"
 	ActPause      Action = "pause"
@@ -76,29 +86,53 @@ const (
 	CloseUnavailable  = 1011 // the media server didn't answer
 )
 
+// Error codes the hub reports itself, in error and result messages (SPEC.md, section 5). Any other
+// error in a result is the player's own text.
+const (
+	codeBadMessage        = "badMessage"
+	codeUnknownDevice     = "unknownDevice"
+	codeOffline           = "offline"
+	codeNotPlayer         = "notPlayer"
+	codeUnsupported       = "unsupported" // the action isn't in the player's capabilities
+	codeTimeout           = "timeout"
+	codeNothingToTransfer = "nothingToTransfer"
+	codeFailed            = "failed" // a player's result not ok, without an error of its own
+)
+
 // Auth is what the device already uses with the media server. The hub checks it there.
 type Auth struct {
-	Scheme   string `json:"scheme"`
+	Scheme   Scheme `json:"scheme"`
 	Username string `json:"username,omitempty"`
 	Token    string `json:"token,omitempty"`
 	Salt     string `json:"salt,omitempty"`
 	APIKey   string `json:"apiKey,omitempty"`
 }
 
+// Scheme is the kind of credentials in an Auth, which says the fields it has (SPEC.md, section 2).
+type Scheme string
+
+// The schemes of Auth.
+const (
+	SchemeSubsonic Scheme = "subsonic" // Username, Token and Salt, as in a Subsonic API call
+	SchemeAPIKey   Scheme = "apiKey"   // APIKey, from OpenSubsonic's apiKeyAuthentication
+	SchemeJellyfin Scheme = "jellyfin" // Token, a Jellyfin access token
+)
+
 // clean keeps only the fields of the scheme, and reports whether they are all there.
 func (a Auth) clean() (Auth, bool) {
 	switch a.Scheme {
-	case "subsonic":
+	case SchemeSubsonic:
 		return Auth{Scheme: a.Scheme, Username: a.Username, Token: a.Token, Salt: a.Salt},
 			a.Username != "" && a.Token != "" && a.Salt != ""
-	case "apiKey":
+	case SchemeAPIKey:
 		return Auth{Scheme: a.Scheme, APIKey: a.APIKey}, a.APIKey != ""
-	case "jellyfin":
+	case SchemeJellyfin:
 		return Auth{Scheme: a.Scheme, Token: a.Token}, a.Token != ""
 	}
 	return Auth{}, false
 }
 
+// DeviceInfo is how a device describes itself in its hello (SPEC.md, section 2).
 type DeviceInfo struct {
 	// ID is stable per installation (a UUID the app keeps), not per connection.
 	ID      string `json:"id"`
@@ -142,6 +176,8 @@ func (d *DeviceInfo) clean() bool {
 func (d *DeviceInfo) isPlayer() bool           { return slices.Contains(d.Roles, RolePlayer) }
 func (d *DeviceInfo) obeys(action Action) bool { return slices.Contains(d.Capabilities, action) }
 
+// QueueItem is a track in a player's queue, with enough metadata to be shown without asking the
+// media server (SPEC.md, section 4).
 type QueueItem struct {
 	// ID is the media server's id, in the recipient's API. Empty when the hub couldn't translate it.
 	ID         string `json:"id,omitempty"`
@@ -221,6 +257,8 @@ func (s *PlayerState) current() (QueueItem, bool) {
 	return QueueItem{}, false
 }
 
+// Command is what a controller asks of a player. The hub passes on only the fields of its Action
+// (SPEC.md, section 5).
 type Command struct {
 	Action     Action      `json:"action"`
 	PositionMs *int64      `json:"positionMs,omitempty"`

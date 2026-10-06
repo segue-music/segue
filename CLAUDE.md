@@ -81,9 +81,9 @@ The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binar
 
 ## Conventions
 
-- Code, comments, `README.md` and `SPEC.md` are in English. Error codes from the hub reach users
-  through the app, which turns them into Portuguese messages (`describeError` in segue-app's
-  `lib/ui/errors.dart`), so a new error string needs an entry there.
+- Code, comments, `README.md` and `SPEC.md` are in English. Error codes from the hub (the `code`
+  constants in `protocol.go`) reach users through the app, which turns them into Portuguese
+  messages (`describeError` in segue-app's `lib/ui/errors.dart`), so a new one needs an entry there.
 - Commit messages are in Portuguese: a short title (prefixed `Hub:` for hub-only changes) and a
   body explaining the behaviour and why.
 - `README.md` has "Next steps". Update it when a feature lands.

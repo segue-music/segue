@@ -84,6 +84,8 @@ type pending struct {
 	done   chan outcome // buffered: finishing never blocks
 }
 
+// New returns a hub configured by opts, and panics if opts.Authenticate is nil. With a StatePath or
+// a Report, the hub has work of its own in the background: call Close at shutdown.
 func New(opts Options) *Hub {
 	if opts.Authenticate == nil {
 		panic("hub: Options.Authenticate is required")
@@ -120,10 +122,10 @@ func New(opts Options) *Hub {
 				}
 			}
 		}()
-		h.stopReportingAgain = func() {
+		h.stopReportingAgain = sync.OnceFunc(func() {
 			ticker.Stop()
 			close(done)
-		}
+		})
 	}
 	return h
 }
@@ -138,6 +140,7 @@ type Session struct {
 	helloTimer *time.Timer
 }
 
+// Open starts the session of a new connection, which has Options.HelloTimeout to send its hello.
 func (h *Hub) Open(conn Conn) *Session {
 	return &Session{
 		hub:        h,
@@ -146,6 +149,8 @@ func (h *Hub) Open(conn Conn) *Session {
 	}
 }
 
+// Message takes one text frame from the device: its hello, then any other message. ctx bounds the
+// check of the hello's credentials with the media server.
 func (s *Session) Message(ctx context.Context, raw []byte) {
 	var msg incoming
 	err := json.Unmarshal(raw, &msg)
@@ -162,12 +167,14 @@ func (s *Session) Message(ctx context.Context, raw []byte) {
 	switch {
 	case s.entry == nil: // the hello failed and the connection is closing
 	case err != nil:
-		s.conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+		s.conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 	default:
 		s.hub.dispatch(s.entry, s.conn, msg)
 	}
 }
 
+// Closed ends the session once the connection is gone. The device goes offline, unless a newer
+// connection of it took over.
 func (s *Session) Closed() {
 	s.helloTimer.Stop()
 	if s.entry != nil {
@@ -230,7 +237,7 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 	}
 	e.info, e.auth, e.conn, e.lastSeen = info, auth, conn, h.opts.Now()
 	if replaced != nil {
-		h.failPending(e, "offline")
+		h.failPending(e, codeOffline)
 		replaced.Close(CloseReplaced, "the device connected again")
 	}
 
@@ -265,7 +272,7 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 	}
 	now := h.opts.Now()
 	e.conn, e.lastSeen = nil, now
-	h.failPending(e, "offline")
+	h.failPending(e, codeOffline)
 	if e.state != nil {
 		// Offline, it doesn't play (SPEC.md, section 3). Left playing, it would come back announced
 		// as playing, before its first report, and the other apps would follow it.
@@ -295,7 +302,7 @@ func (h *Hub) dispatch(e *entry, conn Conn, msg incoming) {
 	case "result":
 		h.onResult(e, msg)
 	default:
-		conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 	}
 }
 
@@ -305,10 +312,10 @@ func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
 	defer h.mu.Unlock()
 	switch {
 	case !e.info.isPlayer():
-		conn.Send(errorMsg{Type: "error", Error: "notPlayer"})
+		conn.Send(errorMsg{Type: "error", Error: codeNotPlayer})
 		return
 	case !ok:
-		conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 		return
 	}
 	now := h.opts.Now()
@@ -360,7 +367,7 @@ func leave(e *entry) (command Command, ok bool) {
 
 func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 	if msg.ID == "" {
-		conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 		return
 	}
 	command, ok := parseCommand(msg.Command)
@@ -371,9 +378,9 @@ func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 	var o outcome
 	switch {
 	case !ok:
-		o.err = "badMessage"
+		o.err = codeBadMessage
 	case target == nil:
-		o.err = "unknownDevice"
+		o.err = codeUnknownDevice
 	default:
 		o = h.request(target, command, fromAPI, from)
 	}
@@ -384,7 +391,7 @@ func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 // the source.
 func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	if msg.ID == "" {
-		conn.Send(errorMsg{Type: "error", Error: "badMessage"})
+		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 		return
 	}
 	reply := func(o outcome) { conn.Send(resultMsg{Type: "result", Re: msg.ID, OK: o.ok, Error: o.err}) }
@@ -398,12 +405,12 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	problem := ""
 	switch {
 	case source == nil || destination == nil:
-		problem = "unknownDevice"
+		problem = codeUnknownDevice
 	case source == destination:
-		problem = "badMessage"
+		problem = codeBadMessage
 	// An offline source still has its last state: the queue of a closed app can be picked up.
 	case source.state == nil || len(source.state.Queue) == 0:
-		problem = "nothingToTransfer"
+		problem = codeNothingToTransfer
 	default:
 		state := source.state
 		index := 0
@@ -447,7 +454,7 @@ func (h *Hub) onResult(e *entry, msg incoming) {
 	}
 	o := outcome{ok: msg.OK}
 	if !msg.OK {
-		o.err = cmp.Or(msg.Error, "failed")
+		o.err = cmp.Or(msg.Error, codeFailed)
 	}
 	h.finish(msg.Re, o)
 }
@@ -459,13 +466,13 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 	switch {
 	case target.conn == nil:
 		h.mu.Unlock()
-		return outcome{err: "offline"}
+		return outcome{err: codeOffline}
 	case !target.info.isPlayer():
 		h.mu.Unlock()
-		return outcome{err: "notPlayer"}
+		return outcome{err: codeNotPlayer}
 	case !target.info.obeys(command.Action):
 		h.mu.Unlock()
-		return outcome{err: "unsupported"}
+		return outcome{err: codeUnsupported}
 	}
 	if command.Action == ActSetQueue {
 		command.Queue = h.translateQueue(command.Queue, fromAPI, target.info.API)
@@ -489,7 +496,7 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 		if !waiting {
 			return <-p.done // the answer arrived just as time ran out
 		}
-		return outcome{err: "timeout"}
+		return outcome{err: codeTimeout}
 	}
 }
 

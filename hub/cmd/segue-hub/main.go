@@ -37,7 +37,8 @@ func main() {
 		kind, err = detectUpstream(ctx, log, upstream)
 		if ctx.Err() != nil {
 			return
-		} else if err != nil {
+		}
+		if err != nil {
 			fail("SEGUE_UPSTREAM is not a Navidrome, Subsonic or Jellyfin server", "upstream", upstream, "err", err)
 		}
 		log.Info("media server found", "upstream", upstream, "kind", kind)

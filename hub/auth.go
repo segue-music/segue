@@ -22,6 +22,7 @@ type Authenticator func(ctx context.Context, auth Auth) (user string, ok bool, e
 // UpstreamKind is the kind of media server behind the hub.
 type UpstreamKind string
 
+// The kinds of media server the hub works with.
 const (
 	KindNavidrome UpstreamKind = "navidrome" // Subsonic API, plus the Jellyfin API at /jellyfin
 	KindSubsonic  UpstreamKind = "subsonic"
@@ -30,7 +31,7 @@ const (
 
 // ErrNotAMediaServer is DetectUpstream's answer for a URL that answers, but as neither a Subsonic
 // nor a Jellyfin server.
-var ErrNotAMediaServer = errors.New("neither a Subsonic nor a Jellyfin server")
+var ErrNotAMediaServer = errors.New("hub: neither a Subsonic nor a Jellyfin server")
 
 // DetectUpstream asks the media server at baseURL what it is: its answer to a Subsonic ping without
 // credentials (whose OpenSubsonic type says Navidrome), or else to Jellyfin's public system info.
@@ -101,7 +102,7 @@ func probe(ctx context.Context, client *http.Client, target string, out any) err
 // DevAuthenticator accepts anyone: Subsonic credentials as the username they claim, anything else
 // as "dev". For demos and tests only.
 func DevAuthenticator(_ context.Context, auth Auth) (string, bool, error) {
-	if auth.Scheme == "subsonic" {
+	if auth.Scheme == SchemeSubsonic {
 		return auth.Username, true, nil
 	}
 	return "dev", true, nil
@@ -126,7 +127,7 @@ func UpstreamAuthenticator(kind UpstreamKind, baseURL string, cacheFor time.Dura
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	check := func(ctx context.Context, auth Auth) (string, bool, error) {
-		if auth.Scheme == "jellyfin" {
+		if auth.Scheme == SchemeJellyfin {
 			if kind == KindSubsonic || strings.ContainsAny(auth.Token, `"\`) || strings.IndexFunc(auth.Token, unicode.IsControl) >= 0 {
 				return "", false, nil
 			}
@@ -141,7 +142,7 @@ func UpstreamAuthenticator(kind UpstreamKind, baseURL string, cacheFor time.Dura
 		}
 		query := subsonicQuery(auth, clientName)
 		endpoint := "ping"
-		if auth.Scheme != "subsonic" {
+		if auth.Scheme != SchemeSubsonic {
 			// An API key doesn't say whose it is: tokenInfo (OpenSubsonic apiKeyAuthentication) does.
 			endpoint = "tokenInfo"
 		}
@@ -157,7 +158,7 @@ func UpstreamAuthenticator(kind UpstreamKind, baseURL string, cacheFor time.Dura
 		if !found || body.Response.Status != "ok" {
 			return "", false, err
 		}
-		if auth.Scheme == "subsonic" {
+		if auth.Scheme == SchemeSubsonic {
 			return auth.Username, true, nil
 		}
 		return body.Response.TokenInfo.Username, body.Response.TokenInfo.Username != "", nil
@@ -199,7 +200,7 @@ func UpstreamAuthenticator(kind UpstreamKind, baseURL string, cacheFor time.Dura
 // subsonicQuery is the query of a Subsonic API call made with auth (subsonic or apiKey) by client.
 func subsonicQuery(auth Auth, client string) url.Values {
 	query := url.Values{"v": {"1.16.1"}, "c": {client}, "f": {"json"}}
-	if auth.Scheme == "subsonic" {
+	if auth.Scheme == SchemeSubsonic {
 		query.Set("u", auth.Username)
 		query.Set("t", auth.Token)
 		query.Set("s", auth.Salt)

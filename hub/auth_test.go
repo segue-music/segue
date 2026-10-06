@@ -24,11 +24,12 @@ func fakeMediaServer(t *testing.T) (string, *atomic.Int32) {
 		}
 		switch r.URL.Path {
 		case "/rest/ping.view":
-			if q.Get("u") == "" {
+			switch {
+			case q.Get("u") == "":
 				subsonic(map[string]any{"status": "failed", "error": map[string]any{"code": 10}})
-			} else if q.Get("u") == "alice" && q.Get("t") == "good" && q.Get("c") == clientName {
+			case q.Get("u") == "alice" && q.Get("t") == "good" && q.Get("c") == clientName:
 				subsonic(map[string]any{"status": "ok"})
-			} else {
+			default:
 				subsonic(map[string]any{"status": "failed", "error": map[string]any{"code": 40}})
 			}
 		case "/rest/tokenInfo.view":

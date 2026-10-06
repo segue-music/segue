@@ -26,14 +26,18 @@ var upgrader = websocket.Upgrader{
 
 // Handler serves the hub: GET /v1/info and the WebSocket at /v1/ws. Both also answer under
 // /connect/, where the hub sits on the media server's origin (SPEC.md, "Discovery"), whether or not
-// the reverse proxy strips that prefix. info adds fields to /v1/info.
+// the reverse proxy strips that prefix. info adds fields to /v1/info; Handler panics if they don't
+// encode as JSON.
 func (h *Hub) Handler(info map[string]any) http.Handler {
 	fields := map[string]any{}
 	for k, v := range info {
 		fields[k] = v
 	}
 	fields["protocol"], fields["versions"] = "segue", []int{ProtocolVersion}
-	infoJSON, _ := json.Marshal(fields)
+	infoJSON, err := json.Marshal(fields)
+	if err != nil {
+		panic("hub: the info for /v1/info doesn't encode as JSON: " + err.Error())
+	}
 
 	serveInfo := func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

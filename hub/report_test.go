@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -51,8 +52,8 @@ var subsonicSongs = []map[string]any{
 func TestReportsWhatADevicePlays(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	report, reported := reportsTo()
-	url, _ := startHub(t, Options{Now: c.Now, Report: report})
-	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	hubURL, _ := startHub(t, Options{Now: c.Now, Report: report})
+	tv, _ := join(t, hubURL, as("alice"), info("tv", Subsonic, player, everything...))
 	want := func(id string, status Status, positionMs int64) {
 		t.Helper()
 		w := played(as("alice"), "tv", id, status, positionMs)
@@ -90,8 +91,8 @@ func TestReportsWhatADevicePlays(t *testing.T) {
 
 func TestAStopNamesTheTrackTheMediaServerHas(t *testing.T) {
 	report, reported := reportsTo()
-	url, _ := startHub(t, Options{Report: report})
-	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	hubURL, _ := startHub(t, Options{Report: report})
+	tv, _ := join(t, hubURL, as("alice"), info("tv", Subsonic, player, everything...))
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "index": 0, "queue": subsonicSongs})
 	nextReport(t, reported)
 	// A track without an id can't be shown, so the last one is taken off.
@@ -104,8 +105,8 @@ func TestAStopNamesTheTrackTheMediaServerHas(t *testing.T) {
 func TestAnotherTrackStopsTheOneBeforeWhereItGotTo(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	report, reported := reportsTo()
-	url, _ := startHub(t, Options{Now: c.Now, Report: report})
-	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	hubURL, _ := startHub(t, Options{Now: c.Now, Report: report})
+	tv, _ := join(t, hubURL, as("alice"), info("tv", Subsonic, player, everything...))
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "index": 0, "queue": subsonicSongs})
 	nextReport(t, reported)
 	c.advance(268 * time.Second) // to its end, by itself: the next report is the next track
@@ -123,8 +124,8 @@ func TestAnotherTrackStopsTheOneBeforeWhereItGotTo(t *testing.T) {
 func TestReportsAgainWhilePlaying(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	report, reported := reportsTo()
-	url, h := startHub(t, Options{Now: c.Now, Report: report})
-	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	hubURL, h := startHub(t, Options{Now: c.Now, Report: report})
+	tv, _ := join(t, hubURL, as("alice"), info("tv", Subsonic, player, everything...))
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "index": 0, "queue": subsonicSongs})
 	nextReport(t, reported)
 	c.advance(reportAgainAfter - time.Second)
@@ -161,6 +162,13 @@ func noReport(t *testing.T, reported chan Playback) {
 	}
 }
 
+func TestClosingTwice(t *testing.T) {
+	report, _ := reportsTo()
+	h := New(Options{Authenticate: byUsername, Report: report, StatePath: filepath.Join(t.TempDir(), "last.json")})
+	h.Close()
+	h.Close()
+}
+
 func TestReportQueueKeepsStopsAndStarts(t *testing.T) {
 	var sent []Playback
 	q := &reportQueue{
@@ -191,10 +199,10 @@ func TestReportQueueKeepsStopsAndStarts(t *testing.T) {
 func TestReportsOnlyForDevicesThatDontReportThemselves(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	report, reported := reportsTo()
-	url, _ := startHub(t, Options{Now: c.Now, Report: report, Authenticate: func(context.Context, Auth) (string, bool, error) {
+	hubURL, _ := startHub(t, Options{Now: c.Now, Report: report, Authenticate: func(context.Context, Auth) (string, bool, error) {
 		return "alice", true, nil
 	}})
-	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+	pc, _ := join(t, hubURL, as("alice"), info("pc", Subsonic, controller))
 	itself := info("itself", Jellyfin, player)
 	itself.ReportsPlayback = true
 	jellyfinToken := Auth{Scheme: "jellyfin", Token: "abc"}
@@ -208,7 +216,7 @@ func TestReportsOnlyForDevicesThatDontReportThemselves(t *testing.T) {
 		{as("alice"), info("subsonic on jellyfin", Jellyfin, player), songs},
 	}
 	for _, d := range devices {
-		dev, _ := join(t, url, d.auth, d.device)
+		dev, _ := join(t, hubURL, d.auth, d.device)
 		dev.report(map[string]any{"status": "playing", "positionMs": 0, "queue": d.queue})
 		for pc.expect("state").DeviceID != d.device.ID { // until the hub has taken the report in
 		}
@@ -223,7 +231,7 @@ func TestReportsOnlyForDevicesThatDontReportThemselves(t *testing.T) {
 		{Auth{Scheme: "apiKey", APIKey: "k"}, info("tv", Subsonic, player), subsonicSongs, dreamOn},
 		{jellyfinToken, info("phone", Jellyfin, player), songs, songs[0]["id"].(string)},
 	} {
-		dev, _ := join(t, url, d.auth, d.device)
+		dev, _ := join(t, hubURL, d.auth, d.device)
 		dev.report(map[string]any{"status": "playing", "positionMs": 0, "queue": d.queue})
 		want := played(d.auth, d.device.ID, d.id, Playing, 0)
 		if got := nextReport(t, reported); got != want {

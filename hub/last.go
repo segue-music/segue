@@ -64,7 +64,7 @@ func (h *Hub) saveLast() {
 }
 
 // Close writes what is still waiting to be written, and sends the reports still waiting. The hub
-// must not be used afterwards.
+// must not be used afterwards. Calling Close again does nothing.
 func (h *Hub) Close() {
 	if h.store != nil {
 		h.store.close()

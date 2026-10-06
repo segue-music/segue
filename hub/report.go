@@ -192,7 +192,7 @@ func jellyfinAuthorization(p Playback) string {
 func UpstreamReporter(kind UpstreamKind, baseURL string) Reporter {
 	subsonic, jellyfin := SubsonicReporter(baseURL), JellyfinReporter(jellyfinBase(kind, baseURL))
 	return func(ctx context.Context, p Playback) error {
-		if p.Auth.Scheme == "jellyfin" {
+		if p.Auth.Scheme == SchemeJellyfin {
 			return jellyfin(ctx, p)
 		}
 		return subsonic(ctx, p)
@@ -262,9 +262,9 @@ func (h *Hub) notePlayback(e *entry) {
 // credentials, which the hub reports with.
 func reportable(e *entry) bool {
 	switch e.auth.Scheme {
-	case "subsonic", "apiKey":
+	case SchemeSubsonic, SchemeAPIKey:
 		return e.info.API == Subsonic
-	case "jellyfin":
+	case SchemeJellyfin:
 		return e.info.API == Jellyfin
 	}
 	return false
