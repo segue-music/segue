@@ -13,6 +13,7 @@
 
 <p align="center">
   <a href="SPEC.md">Protocol</a> ·
+  <a href="IMPLEMENTING.md">Implementing it</a> ·
   <a href="#hub">Hub</a> ·
   <a href="https://github.com/segue-music/segue-app">App</a> ·
   <a href="#next-steps">Next steps</a>
@@ -39,6 +40,7 @@ have run next to a real Navidrome since 2026-10-03.
 | Folder | What |
 |---|---|
 | `SPEC.md` | The protocol |
+| `IMPLEMENTING.md` | The app's side of it, in the order an app developer builds it |
 | `hub/` | The reference hub, in Go. Package `hub` (usable as a library), binary in `cmd/segue-hub` |
 
 The hub is in Go, the language of Navidrome, so that it can move into a media server. It also
@@ -49,8 +51,9 @@ The app, a music player for Navidrome, other OpenSubsonic servers and Jellyfin i
 (Linux, Windows, macOS, Android, iOS), is in its own repository,
 [segue-music/segue-app](https://github.com/segue-music/segue-app), with its side of the
 protocol in Dart (`lib/segue/`). It lived here, in `app/`, until 2026-10-05. A client in another
-language follows `SPEC.md`. A reference client in TypeScript, for apps like Feishin and Jellify,
-lived in `client/` until 2026-10-03: `git checkout c22dc7b -- client` brings it back.
+language follows `SPEC.md`, and [IMPLEMENTING.md](IMPLEMENTING.md) walks through it. A reference
+client in TypeScript, for apps like Feishin and Jellify, lived in `client/` until 2026-10-03:
+`git checkout c22dc7b -- client` brings it back.
 
 ## Hub
 
