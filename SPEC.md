@@ -144,6 +144,16 @@ If the hub closes the connection, the code tells why:
 | 4003 | The same device connected again elsewhere | Don't reconnect on its own |
 | 1011 | The media server didn't answer | Reconnect with backoff |
 
+After `welcome`, a message the hub can't take doesn't close the connection. A `command` or
+`transfer` with an `id` is answered with a `result` that carries the error
+([section 5](#5-commands)). Any other gets `{"type": "error", "error": "..."}`, and has no effect:
+
+- `badMessage`: not JSON, an unknown `type`, an invalid `state` (no `status` or `positionMs`, say),
+  or a `command` or `transfer` without `id`;
+- `notPlayer`: a `state` from a device that isn't a player.
+
+It means a bug in the client, which should log it.
+
 ## 3. Devices
 
 A `Device` is the device's `hello` info plus `online` and, for players that reported, `state`. The
@@ -233,7 +243,8 @@ obeys and answers `{"type": "result", "re": "<hub id>", "ok": true}` (or `"ok": 
 
 Errors the hub reports itself: `unknownDevice`; `offline`; `notPlayer`; `unsupported` (the action
 isn't in the player's `capabilities`, so it wasn't sent); `timeout` (no answer in 10 s);
-`badMessage`. Any other `error` is the player's own text.
+`badMessage`; `failed` (the player answered `"ok": false` with no `error`). Any other `error` is
+the player's own text.
 
 ## 6. Transfer
 

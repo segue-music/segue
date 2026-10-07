@@ -38,7 +38,7 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/src -w /src -e HOME=/tmp -e CG
 Configuration is all environment variables (`SEGUE_UPSTREAM`, `SEGUE_LISTEN`, `SEGUE_STATE`,
 `SEGUE_AUTH`); see the table in `README.md`. The hub asks `SEGUE_UPSTREAM` what it is at startup
 (`DetectUpstream`), and waits for it to answer. `SEGUE_AUTH=none` accepts any device as the user it
-claims, for tests and demos only.
+claims, for tests and demos only, and lets `SEGUE_UPSTREAM` be empty (the hub then assumes Navidrome).
 
 The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binary built here, at
 `hub/segue-hub`, with `SEGUE_AUTH=none`, and find its port by parsing the log line

@@ -68,10 +68,10 @@ SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
 
 | Variable | Default | |
 |---|---|---|
-| `SEGUE_UPSTREAM` | (required) | The media server's URL, as the hub reaches it. The hub asks it at startup, until it answers, whether it is Navidrome (Subsonic API, Jellyfin API at `/jellyfin`, ids translated), another Subsonic server or Jellyfin |
+| `SEGUE_UPSTREAM` | (required, except with `SEGUE_AUTH=none`) | The media server's URL, as the hub reaches it. The hub asks it at startup, until it answers, whether it is Navidrome (Subsonic API, Jellyfin API at `/jellyfin`, ids translated), another Subsonic server or Jellyfin |
 | `SEGUE_LISTEN` | `127.0.0.1:8480` | Address and port |
 | `SEGUE_STATE` | | A file where each user's last playback is kept across restarts (SPEC, section 7). Empty keeps it in memory only |
-| `SEGUE_AUTH` | | `none` accepts any device, as the Subsonic user it claims (`dev` for other schemes). Only for trying things out |
+| `SEGUE_AUTH` | | `none` accepts any device, as the Subsonic user it claims (`dev` for other schemes). Only for trying things out, and then without a media server if `SEGUE_UPSTREAM` is empty |
 
 The hub also tells the media server what each device plays, with the device's own credentials
 (SPEC, section 12), so Navidrome's Now Playing and Jellyfin's sessions show Segue's devices by name.

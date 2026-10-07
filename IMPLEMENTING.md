@@ -185,6 +185,8 @@ for a track it hears of halfway, which shows it without counting.
   take turns kicking each other out.
 - Fail the requests still waiting for an answer when the connection closes.
 - The hub pings every 30 s. WebSocket libraries usually answer by themselves.
+- Log the hub's `error` messages: each says that a message of yours had no effect, and why
+  ([SPEC, section 2](SPEC.md#2-connection-and-authentication)).
 - Ignore message types, fields and capabilities you don't know, so that your app keeps working
   with a newer hub.
 
