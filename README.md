@@ -87,8 +87,8 @@ listens on `0.0.0.0:8480`.
 
 ## Next steps
 
-1. The app: making and editing playlists, editing the queue (play next, add to it), and trying the
-   iOS build on an iPhone and in a car (see [segue-app](https://github.com/segue-music/segue-app)).
+1. The app: editing the queue (play next, add to it), and trying the iOS build on an iPhone and in
+   a car (see [segue-app](https://github.com/segue-music/segue-app)).
 2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`, leaving out what
    the hub reports itself), as devices that can be seen but not commanded. That covers apps like
    Symfonium, which is closed source.
