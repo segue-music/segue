@@ -238,6 +238,7 @@ obeys and answers `{"type": "result", "re": "<hub id>", "ok": true}` (or `"ok": 
 | `seek` | `positionMs` | |
 | `setVolume` | `volume` (0–100) | |
 | `setQueue` | `queue`, `index`, `positionMs`, `play` | Replace the queue and go to `index` at `positionMs`, playing if `play` |
+| `addToQueue` | `queue`, `next` | Add the items to the queue, the current track playing on: right after it if `next` ("play next"), otherwise after the last one. Shuffled, that is their place in the play order, and turning shuffle off puts them where they would have gone unshuffled: after the track that was current, or at the end. A player with no queue takes them as its queue, paused at the first. Report the new `queue` |
 | `setRepeat` | `repeat` (`off`, `all`, `one`) | |
 | `setShuffle` | `shuffle` (true or false) | On, shuffle the queue, the current track still playing; off, back to the order it had. Either way, report the new `queue` |
 
@@ -380,7 +381,7 @@ Navidrome's Jellyfin API counts a play when a track stops past half of it or fou
 
 - User identity across APIs on servers other than Navidrome (Jellyfin with a Subsonic plugin, for
   instance), where user names may not match.
-- Editing the queue (play next, add to queue) without replacing it.
+- Editing the queue beyond adding to it ([section 5](#5-commands)): moving and removing tracks.
 - Repeat and shuffle on a transfer: `setQueue` carries the queue in its play order, but neither
   mode, so the destination keeps its own.
 - Group playback ("Jam"): one queue, several devices listening. It would need a way out of "one

@@ -71,11 +71,12 @@ const (
 	ActSetQueue   Action = "setQueue"
 	ActSetRepeat  Action = "setRepeat"
 	ActSetShuffle Action = "setShuffle"
+	ActAddToQueue Action = "addToQueue"
 )
 
 var knownActions = map[Action]bool{
 	ActPlay: true, ActPause: true, ActToggle: true, ActStop: true, ActNext: true, ActPrevious: true, ActJump: true,
-	ActSeek: true, ActSetVolume: true, ActSetQueue: true, ActSetRepeat: true, ActSetShuffle: true,
+	ActSeek: true, ActSetVolume: true, ActSetQueue: true, ActSetRepeat: true, ActSetShuffle: true, ActAddToQueue: true,
 }
 
 // Close codes (SPEC.md, section 2).
@@ -268,6 +269,8 @@ type Command struct {
 	Play       *bool       `json:"play,omitempty"`
 	Repeat     Repeat      `json:"repeat,omitempty"`
 	Shuffle    *bool       `json:"shuffle,omitempty"`
+	// Next puts the tracks of an addToQueue right after the current one, rather than at the end.
+	Next *bool `json:"next,omitempty"`
 }
 
 // Device is a device as other devices see it.
@@ -335,6 +338,9 @@ func parseCommand(raw json.RawMessage) (Command, bool) {
 		ok := c.Queue != nil && validQueue(c.Queue) && c.Index != nil && *c.Index >= 0 &&
 			c.PositionMs != nil && *c.PositionMs >= 0 && c.Play != nil
 		return Command{Action: c.Action, Queue: c.Queue, Index: c.Index, PositionMs: c.PositionMs, Play: c.Play}, ok
+	case ActAddToQueue:
+		ok := len(c.Queue) > 0 && validQueue(c.Queue) && c.Next != nil
+		return Command{Action: c.Action, Queue: c.Queue, Next: c.Next}, ok
 	}
 	return Command{}, false
 }

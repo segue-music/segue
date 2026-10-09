@@ -86,7 +86,7 @@ func info(id string, api API, roles []Role, capabilities ...Action) DeviceInfo {
 var (
 	player     = []Role{RolePlayer, RoleController}
 	controller = []Role{RoleController}
-	everything = []Action{ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious, ActJump, ActSeek, ActSetVolume, ActSetQueue, ActSetRepeat, ActSetShuffle}
+	everything = []Action{ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious, ActJump, ActSeek, ActSetVolume, ActSetQueue, ActSetRepeat, ActSetShuffle, ActAddToQueue}
 )
 
 func as(user string) Auth { return Auth{Scheme: "subsonic", Username: user, Token: "-", Salt: "-"} }
@@ -378,6 +378,9 @@ func TestCommands(t *testing.T) {
 		{"tv", map[string]any{"action": "jump"}, "badMessage"},
 		{"tv", map[string]any{"action": "jump", "index": -1}, "badMessage"},
 		{"speaker", map[string]any{"action": "jump", "index": 0}, "unsupported"},
+		{"tv", map[string]any{"action": "addToQueue", "queue": songs}, "badMessage"},
+		{"tv", map[string]any{"action": "addToQueue", "queue": []any{}, "next": true}, "badMessage"},
+		{"speaker", map[string]any{"action": "addToQueue", "queue": songs, "next": true}, "unsupported"},
 	} {
 		pc.send(map[string]any{"type": "command", "id": "x", "target": c.target, "command": c.command})
 		if r := pc.expect("result"); r.OK || r.Error != c.want {
@@ -427,6 +430,31 @@ func TestTransfer(t *testing.T) {
 	if r := pc.expect("result"); r.Error != "nothingToTransfer" {
 		t.Fatalf("result %+v", r)
 	}
+}
+
+func TestAddToQueue(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, controller))
+
+	// The tracks reach the player in its own API, with the place they go.
+	phone.send(map[string]any{"type": "command", "id": "a1", "target": "tv", "command": map[string]any{"action": "addToQueue", "queue": songs, "next": false}})
+	got := tv.obey("")
+	if got.Action != ActAddToQueue || got.Next == nil || *got.Next || got.Index != nil || got.Play != nil {
+		t.Fatalf("the TV got %+v", got)
+	}
+	if len(got.Queue) != 2 || got.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" || got.Queue[1].ID != "7N42dgm5tFLK9N8MT7fHC7" {
+		t.Fatalf("queue %+v", got.Queue)
+	}
+	if r := phone.expect("result"); r.Re != "a1" || !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+
+	phone.send(map[string]any{"type": "command", "id": "a2", "target": "tv", "command": map[string]any{"action": "addToQueue", "queue": songs[:1], "next": true}})
+	if got := tv.obey(""); got.Next == nil || !*got.Next || len(got.Queue) != 1 {
+		t.Fatalf("the TV got %+v", got)
+	}
+	phone.expect("result")
 }
 
 func TestTransferLeavesThePausedSourceIdleToo(t *testing.T) {

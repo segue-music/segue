@@ -474,7 +474,7 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 		h.mu.Unlock()
 		return outcome{err: codeUnsupported}
 	}
-	if command.Action == ActSetQueue {
+	if command.Action == ActSetQueue || command.Action == ActAddToQueue {
 		command.Queue = h.translateQueue(command.Queue, fromAPI, target.info.API)
 	}
 	id := newID()

@@ -111,6 +111,9 @@ Then, if you are a player, report your full state ([section 4](#4-report-as-a-pl
   - Items may come without `id`. The reference app drops them, and moves `index` back by those it
     dropped before it, so that the same track stays current. With nothing playable left, it fails.
   - After `setShuffle`, report the new `queue`.
+- `addToQueue` adds items without touching the current track: right after it with `next`, otherwise
+  at the end. Items without `id` are dropped as in `setQueue`; with none left, it fails. A player
+  with no queue takes them as its queue, paused. Report the new `queue`.
 - **The hub's `stop`.** When another of the user's devices starts playing, the hub sends you
   `stop`, as a command from that device ([SPEC, section 4](SPEC.md#4-player-state-and-the-clock)).
   Obey it like any other: leave the player idle, with no queue, and report `stopped`. Paused with the
@@ -124,7 +127,7 @@ Then, if you are a player, report your full state ([section 4](#4-report-as-a-pl
 - Draw the other device from its `state` reports, not from the `result`: the result says the
   command was carried out, and the report that follows says what changed.
 - Disable the controls the player didn't declare in `capabilities` (repeat, shuffle, picking a track
-  from the queue).
+  from the queue, adding to it).
 - Turn the hub's errors into words for the user (`offline`, `timeout`, `unsupported`,
   `nothingToTransfer`...). The reference app's `describeError` (`lib/ui/errors.dart`) is a list of them.
 - `transfer` moves the music. `to` can be your own device ("continue here"), and `from` can be
