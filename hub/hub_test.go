@@ -86,7 +86,7 @@ func info(id string, api API, roles []Role, capabilities ...Action) DeviceInfo {
 var (
 	player     = []Role{RolePlayer, RoleController}
 	controller = []Role{RoleController}
-	everything = []Action{ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious, ActJump, ActSeek, ActSetVolume, ActSetQueue, ActSetRepeat, ActSetShuffle, ActAddToQueue}
+	everything = []Action{ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious, ActJump, ActSeek, ActSetVolume, ActSetQueue, ActSetRepeat, ActSetShuffle, ActAddToQueue, ActMoveInQueue, ActRemoveFromQueue}
 )
 
 func as(user string) Auth { return Auth{Scheme: "subsonic", Username: user, Token: "-", Salt: "-"} }
@@ -381,6 +381,13 @@ func TestCommands(t *testing.T) {
 		{"tv", map[string]any{"action": "addToQueue", "queue": songs}, "badMessage"},
 		{"tv", map[string]any{"action": "addToQueue", "queue": []any{}, "next": true}, "badMessage"},
 		{"speaker", map[string]any{"action": "addToQueue", "queue": songs, "next": true}, "unsupported"},
+		{"tv", map[string]any{"action": "moveInQueue", "index": 1}, "badMessage"},
+		{"tv", map[string]any{"action": "moveInQueue", "to": 0}, "badMessage"},
+		{"tv", map[string]any{"action": "moveInQueue", "index": 1, "to": -1}, "badMessage"},
+		{"speaker", map[string]any{"action": "moveInQueue", "index": 1, "to": 0}, "unsupported"},
+		{"tv", map[string]any{"action": "removeFromQueue"}, "badMessage"},
+		{"tv", map[string]any{"action": "removeFromQueue", "index": -1}, "badMessage"},
+		{"speaker", map[string]any{"action": "removeFromQueue", "index": 1}, "unsupported"},
 	} {
 		pc.send(map[string]any{"type": "command", "id": "x", "target": c.target, "command": c.command})
 		if r := pc.expect("result"); r.OK || r.Error != c.want {
@@ -455,6 +462,35 @@ func TestAddToQueue(t *testing.T) {
 		t.Fatalf("the TV got %+v", got)
 	}
 	phone.expect("result")
+}
+
+func TestMoveAndRemoveInQueue(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, controller))
+
+	// The places reach the player as they were sent, and nothing else.
+	phone.send(map[string]any{"type": "command", "id": "m1", "target": "tv", "command": map[string]any{"action": "moveInQueue", "index": 2, "to": 0, "queue": songs, "next": true}})
+	got := tv.obey("")
+	if got.Action != ActMoveInQueue || got.Index == nil || *got.Index != 2 || got.To == nil || *got.To != 0 || got.Queue != nil || got.Next != nil {
+		t.Fatalf("the TV got %+v", got)
+	}
+	if r := phone.expect("result"); r.Re != "m1" || !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+
+	phone.send(map[string]any{"type": "command", "id": "m2", "target": "tv", "command": map[string]any{"action": "removeFromQueue", "index": 1, "to": 3}})
+	if got := tv.obey(""); got.Action != ActRemoveFromQueue || got.Index == nil || *got.Index != 1 || got.To != nil {
+		t.Fatalf("the TV got %+v", got)
+	}
+	phone.expect("result")
+
+	// The player's own error reaches the controller as it is.
+	phone.send(map[string]any{"type": "command", "id": "m3", "target": "tv", "command": map[string]any{"action": "removeFromQueue", "index": 0}})
+	tv.obey("current track")
+	if r := phone.expect("result"); r.OK || r.Error != "current track" {
+		t.Fatalf("result %+v", r)
+	}
 }
 
 func TestTransferLeavesThePausedSourceIdleToo(t *testing.T) {

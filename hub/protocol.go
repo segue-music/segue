@@ -59,24 +59,27 @@ type Action string
 
 // The actions of commands.
 const (
-	ActPlay       Action = "play"
-	ActPause      Action = "pause"
-	ActToggle     Action = "toggle"
-	ActStop       Action = "stop"
-	ActNext       Action = "next"
-	ActPrevious   Action = "previous"
-	ActJump       Action = "jump"
-	ActSeek       Action = "seek"
-	ActSetVolume  Action = "setVolume"
-	ActSetQueue   Action = "setQueue"
-	ActSetRepeat  Action = "setRepeat"
-	ActSetShuffle Action = "setShuffle"
-	ActAddToQueue Action = "addToQueue"
+	ActPlay            Action = "play"
+	ActPause           Action = "pause"
+	ActToggle          Action = "toggle"
+	ActStop            Action = "stop"
+	ActNext            Action = "next"
+	ActPrevious        Action = "previous"
+	ActJump            Action = "jump"
+	ActSeek            Action = "seek"
+	ActSetVolume       Action = "setVolume"
+	ActSetQueue        Action = "setQueue"
+	ActSetRepeat       Action = "setRepeat"
+	ActSetShuffle      Action = "setShuffle"
+	ActAddToQueue      Action = "addToQueue"
+	ActMoveInQueue     Action = "moveInQueue"
+	ActRemoveFromQueue Action = "removeFromQueue"
 )
 
 var knownActions = map[Action]bool{
 	ActPlay: true, ActPause: true, ActToggle: true, ActStop: true, ActNext: true, ActPrevious: true, ActJump: true,
 	ActSeek: true, ActSetVolume: true, ActSetQueue: true, ActSetRepeat: true, ActSetShuffle: true, ActAddToQueue: true,
+	ActMoveInQueue: true, ActRemoveFromQueue: true,
 }
 
 // Close codes (SPEC.md, section 2).
@@ -271,6 +274,8 @@ type Command struct {
 	Shuffle    *bool       `json:"shuffle,omitempty"`
 	// Next puts the tracks of an addToQueue right after the current one, rather than at the end.
 	Next *bool `json:"next,omitempty"`
+	// To is where a moveInQueue takes the track at Index: the place it then has in the queue.
+	To *int `json:"to,omitempty"`
 }
 
 // Device is a device as other devices see it.
@@ -341,6 +346,11 @@ func parseCommand(raw json.RawMessage) (Command, bool) {
 	case ActAddToQueue:
 		ok := len(c.Queue) > 0 && validQueue(c.Queue) && c.Next != nil
 		return Command{Action: c.Action, Queue: c.Queue, Next: c.Next}, ok
+	case ActMoveInQueue:
+		ok := c.Index != nil && *c.Index >= 0 && c.To != nil && *c.To >= 0
+		return Command{Action: c.Action, Index: c.Index, To: c.To}, ok
+	case ActRemoveFromQueue:
+		return Command{Action: c.Action, Index: c.Index}, c.Index != nil && *c.Index >= 0
 	}
 	return Command{}, false
 }
