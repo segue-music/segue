@@ -88,7 +88,8 @@ Then, if you are a player, report your full state ([section 4](#4-report-as-a-pl
 - Every report has `status` and `positionMs`. `stopped` means nothing is loaded.
 - `queue` is in play order (after shuffling), with title, artist, album and `durationMs` so that the
   other apps show it without a lookup. Send it when it changed, and in full after every
-  (re)connection, since the hub may have restarted.
+  (re)connection, since the hub may have restarted. Shuffled, send `order` with it, each item's place
+  unshuffled, so that the device a transfer takes the queue to can turn shuffle off as you would.
 - Watch for changes your audio engine doesn't signal. In the reference app, seeking and starting
   the current track over had to report explicitly.
 - On mobile, a paused app in the background gets suspended. Report the pause as it happens, and
@@ -110,6 +111,9 @@ Then, if you are a player, report your full state ([section 4](#4-report-as-a-pl
 - `setQueue` is how a transfer arrives: a queue, an index, a position, and whether to play.
   - Items may come without `id`. The reference app drops them, and moves `index` back by those it
     dropped before it, so that the same track stays current. With nothing playable left, it fails.
+  - A transfer brings the modes the source played in: `repeat`, and `shuffle` with its `order`.
+    Shuffled, play `queue` as it comes, without shuffling it again, and keep `order` (dropping the
+    places of the items you dropped) for when shuffle goes off. Without them, keep your own.
   - After `setShuffle`, report the new `queue`.
 - `addToQueue` adds items without touching the current track: right after it with `next`, otherwise
   at the end. Items without `id` are dropped as in `setQueue`; with none left, it fails. A player

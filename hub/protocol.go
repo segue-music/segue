@@ -201,12 +201,15 @@ type PlayerState struct {
 	Volume     *int        `json:"volume,omitempty"`
 	Repeat     Repeat      `json:"repeat,omitempty"` // "": unchanged
 	Shuffle    *bool       `json:"shuffle,omitempty"`
+	// Order is, for a shuffled queue, each item's place in the queue unshuffled, which shuffle going
+	// off goes back to (SPEC.md, section 4). It comes and goes with Queue: nil with one, none.
+	Order []int `json:"order,omitzero"`
 }
 
 func (s *PlayerState) merge(report PlayerState) {
 	s.Status, s.PositionMs = report.Status, report.PositionMs
 	if report.Queue != nil {
-		s.Queue = report.Queue
+		s.Queue, s.Order = report.Queue, report.Order
 	}
 	if report.Index != nil {
 		s.Index = report.Index
@@ -272,6 +275,8 @@ type Command struct {
 	Play       *bool       `json:"play,omitempty"`
 	Repeat     Repeat      `json:"repeat,omitempty"`
 	Shuffle    *bool       `json:"shuffle,omitempty"`
+	// Order is, for the shuffled queue of a setQueue, each item's place in the queue unshuffled.
+	Order []int `json:"order,omitzero"`
 	// Next puts the tracks of an addToQueue right after the current one, rather than at the end.
 	Next *bool `json:"next,omitempty"`
 	// To is where a moveInQueue takes the track at Index: the place it then has in the queue.
@@ -316,7 +321,7 @@ func parseState(raw json.RawMessage) (PlayerState, bool) {
 	ok := (state.Status == Playing || state.Status == Paused || state.Status == Stopped) &&
 		validQueue(state.Queue) && (state.Index == nil || *state.Index >= 0) &&
 		(state.Volume == nil || (*state.Volume >= 0 && *state.Volume <= 100)) &&
-		(state.Repeat == "" || state.Repeat.valid())
+		(state.Repeat == "" || state.Repeat.valid()) && validOrder(state.Order, state.Queue)
 	return state, ok
 }
 
@@ -340,9 +345,14 @@ func parseCommand(raw json.RawMessage) (Command, bool) {
 	case ActSetShuffle:
 		return Command{Action: c.Action, Shuffle: c.Shuffle}, c.Shuffle != nil
 	case ActSetQueue:
+		// The modes are optional; an order goes only with a shuffled queue.
 		ok := c.Queue != nil && validQueue(c.Queue) && c.Index != nil && *c.Index >= 0 &&
-			c.PositionMs != nil && *c.PositionMs >= 0 && c.Play != nil
-		return Command{Action: c.Action, Queue: c.Queue, Index: c.Index, PositionMs: c.PositionMs, Play: c.Play}, ok
+			c.PositionMs != nil && *c.PositionMs >= 0 && c.Play != nil && (c.Repeat == "" || c.Repeat.valid()) &&
+			validOrder(c.Order, c.Queue) && (c.Order == nil || (c.Shuffle != nil && *c.Shuffle))
+		return Command{
+			Action: c.Action, Queue: c.Queue, Index: c.Index, PositionMs: c.PositionMs, Play: c.Play,
+			Repeat: c.Repeat, Shuffle: c.Shuffle, Order: c.Order,
+		}, ok
 	case ActAddToQueue:
 		ok := len(c.Queue) > 0 && validQueue(c.Queue) && c.Next != nil
 		return Command{Action: c.Action, Queue: c.Queue, Next: c.Next}, ok
@@ -353,6 +363,24 @@ func parseCommand(raw json.RawMessage) (Command, bool) {
 		return Command{Action: c.Action, Index: c.Index}, c.Index != nil && *c.Index >= 0
 	}
 	return Command{}, false
+}
+
+// validOrder says whether order is none, or each place in queue once: a queue's order unshuffled.
+func validOrder(order []int, queue []QueueItem) bool {
+	if order == nil {
+		return true
+	}
+	if queue == nil || len(order) != len(queue) {
+		return false
+	}
+	seen := make([]bool, len(order))
+	for _, place := range order {
+		if place < 0 || place >= len(order) || seen[place] {
+			return false
+		}
+		seen[place] = true
+	}
+	return true
 }
 
 func validQueue(queue []QueueItem) bool {

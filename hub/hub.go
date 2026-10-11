@@ -387,8 +387,8 @@ func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 	conn.Send(resultMsg{Type: "result", Re: msg.ID, OK: o.ok, Error: o.err})
 }
 
-// onTransfer hands the source's queue, at its current position, to the destination, then pauses
-// the source.
+// onTransfer hands the source's queue, at its current position and in its modes, to the
+// destination, then pauses the source.
 func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	if msg.ID == "" {
 		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
@@ -419,7 +419,11 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 		}
 		position := state.positionAt(h.opts.Now().UnixMilli())
 		play := msg.Play == nil || *msg.Play
-		handoff = Command{Action: ActSetQueue, Queue: state.Queue, Index: &index, PositionMs: &position, Play: &play}
+		// With the modes it played in, shuffled in the same order, which shuffle going off takes back.
+		handoff = Command{
+			Action: ActSetQueue, Queue: state.Queue, Index: &index, PositionMs: &position, Play: &play,
+			Repeat: state.Repeat, Shuffle: state.Shuffle, Order: state.Order,
+		}
 		sourceAPI = source.info.API
 	}
 	h.mu.Unlock()

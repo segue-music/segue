@@ -311,11 +311,49 @@ func TestStateIsStampedAndTranslated(t *testing.T) {
 	}
 }
 
+func TestTheOrderComesAndGoesWithTheQueue(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player))
+	order := func() []int {
+		_, welcome := join(t, url, as("alice"), info("pc", Subsonic, controller))
+		for _, d := range welcome.Devices {
+			if d.ID == "phone" && d.State != nil {
+				return d.State.Order
+			}
+		}
+		return nil
+	}
+
+	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs, "shuffle": true, "order": []int{1, 0}})
+	if got := order(); !slices.Equal(got, []int{1, 0}) {
+		t.Fatalf("order %v", got)
+	}
+	phone.report(map[string]any{"status": "paused", "positionMs": 1000}) // the queue unchanged
+	if got := order(); !slices.Equal(got, []int{1, 0}) {
+		t.Fatalf("order %v, after a report without the queue", got)
+	}
+	phone.report(map[string]any{"status": "paused", "positionMs": 1000, "queue": songs, "shuffle": false})
+	if got := order(); got != nil {
+		t.Fatalf("order %v, after the queue came without one", got)
+	}
+}
+
 func TestBadStateReports(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player))
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
 	phone.report(map[string]any{"status": "playing"}) // no position
+	if msg := phone.expect("error"); msg.Error != "badMessage" {
+		t.Fatalf("got %+v", msg)
+	}
+	// An order that isn't each place of the queue once, or without the queue it orders.
+	for _, order := range [][]int{{0, 0}, {0, 2}, {0}} {
+		phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs, "shuffle": true, "order": order})
+		if msg := phone.expect("error"); msg.Error != "badMessage" {
+			t.Fatalf("order %v: got %+v", order, msg)
+		}
+	}
+	phone.report(map[string]any{"status": "playing", "positionMs": 0, "order": []int{1, 0}})
 	if msg := phone.expect("error"); msg.Error != "badMessage" {
 		t.Fatalf("got %+v", msg)
 	}
@@ -350,6 +388,16 @@ func TestCommands(t *testing.T) {
 	}
 	pc.expect("result")
 
+	pc.send(map[string]any{"type": "command", "id": "q", "target": "tv", "command": map[string]any{
+		"action": "setQueue", "queue": songs, "index": 1, "positionMs": 0, "play": true,
+		"repeat": "one", "shuffle": true, "order": []int{1, 0},
+	}})
+	if got := tv.obey(""); got.Action != ActSetQueue || got.Repeat != RepeatOne || got.Shuffle == nil || !*got.Shuffle ||
+		!slices.Equal(got.Order, []int{1, 0}) {
+		t.Fatalf("the TV got %+v", got)
+	}
+	pc.expect("result")
+
 	pc.send(map[string]any{"type": "command", "id": "j", "target": "tv", "command": map[string]any{"action": "jump", "index": 2}})
 	if got := tv.obey(""); got.Action != ActJump || got.Index == nil || *got.Index != 2 {
 		t.Fatalf("the TV got %+v", got)
@@ -378,6 +426,9 @@ func TestCommands(t *testing.T) {
 		{"tv", map[string]any{"action": "jump"}, "badMessage"},
 		{"tv", map[string]any{"action": "jump", "index": -1}, "badMessage"},
 		{"speaker", map[string]any{"action": "jump", "index": 0}, "unsupported"},
+		{"tv", map[string]any{"action": "setQueue", "queue": songs, "index": 0, "positionMs": 0, "play": true, "repeat": "twice"}, "badMessage"},
+		{"tv", map[string]any{"action": "setQueue", "queue": songs, "index": 0, "positionMs": 0, "play": true, "shuffle": true, "order": []int{1, 1}}, "badMessage"},
+		{"tv", map[string]any{"action": "setQueue", "queue": songs, "index": 0, "positionMs": 0, "play": true, "order": []int{1, 0}}, "badMessage"},
 		{"tv", map[string]any{"action": "addToQueue", "queue": songs}, "badMessage"},
 		{"tv", map[string]any{"action": "addToQueue", "queue": []any{}, "next": true}, "badMessage"},
 		{"speaker", map[string]any{"action": "addToQueue", "queue": songs, "next": true}, "unsupported"},
@@ -413,7 +464,10 @@ func TestTransfer(t *testing.T) {
 	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
-	phone.report(map[string]any{"status": "playing", "positionMs": 30000, "index": 1, "queue": songs})
+	phone.report(map[string]any{
+		"status": "playing", "positionMs": 30000, "index": 1, "queue": songs,
+		"repeat": "all", "shuffle": true, "order": []int{1, 0},
+	})
 	pc.expect("state")
 	c.advance(200 * time.Millisecond)
 
@@ -421,6 +475,10 @@ func TestTransfer(t *testing.T) {
 	got := tv.obey("")
 	if got.Action != ActSetQueue || *got.Index != 1 || *got.PositionMs != 30200 || !*got.Play {
 		t.Fatalf("the TV got %+v", got)
+	}
+	// In the modes it played in, shuffled in the same order.
+	if got.Repeat != RepeatAll || got.Shuffle == nil || !*got.Shuffle || !slices.Equal(got.Order, []int{1, 0}) {
+		t.Fatalf("the TV got the modes %q, %v, %v", got.Repeat, got.Shuffle, got.Order)
 	}
 	if got.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" || got.Queue[1].ID != "7N42dgm5tFLK9N8MT7fHC7" {
 		t.Fatalf("queue %+v", got.Queue)

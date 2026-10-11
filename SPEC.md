@@ -203,6 +203,10 @@ report periodically:
 - `repeat` is `off`, `all` (after the last track, the first) or `one` (the current track, again and
   again). `shuffle` says whether the queue was shuffled: when it is, `queue` is already in the
   shuffled order. A player that repeats a track reports when it starts over.
+- `order`, for a shuffled queue, gives each item of `queue` its place in the queue unshuffled, which
+  shuffle going off goes back to: `"order": [2, 0, 1]` says that the first track played is the
+  third of the queue unshuffled. It comes with `queue`, and goes with it: a report with `queue` and
+  without `order` leaves none. A transfer takes it to the next device ([section 6](#6-transfer)).
 
 The hub adds `at`, its own time when the report arrived, and relays the report to the other
 devices. Any device computes where playback is now as `positionMs + (hubNow - at)` while `playing`,
@@ -237,7 +241,7 @@ obeys and answers `{"type": "result", "re": "<hub id>", "ok": true}` (or `"ok": 
 | `jump` | `index` | The track at `index` in `queue`, from its start, playing. On the current track, it starts over |
 | `seek` | `positionMs` | |
 | `setVolume` | `volume` (0–100) | |
-| `setQueue` | `queue`, `index`, `positionMs`, `play` | Replace the queue and go to `index` at `positionMs`, playing if `play` |
+| `setQueue` | `queue`, `index`, `positionMs`, `play`; `repeat`, `shuffle`, `order` | Replace the queue and go to `index` at `positionMs`, playing if `play`. With `repeat`, repeat as it says; with `shuffle`, `queue` is in the play order it says, played as it comes: shuffled, in that order, which `order` takes back to unshuffled (without it, shuffle going off leaves the queue as it is); not, in order. Without them, the player keeps its own modes (shuffled, it shuffles the queue). `order` goes only with `"shuffle": true` |
 | `addToQueue` | `queue`, `next` | Add the items to the queue, the current track playing on: right after it if `next` ("play next"), otherwise after the last one. Shuffled, that is their place in the play order, and turning shuffle off puts them where they would have gone unshuffled: after the track that was current, or at the end. A player with no queue takes them as its queue, paused at the first. Report the new `queue` |
 | `moveInQueue` | `index`, `to` | Move the track at `index` in `queue` to `to`, the place it then has, the current track playing on. Shuffled, that changes the play order alone: turning shuffle off puts the tracks back in the order they had. Report the new `queue` |
 | `removeFromQueue` | `index` | Take the track at `index` in `queue` out of it, the current track playing on. The current track itself stays: the player fails, with `current track`. Report the new `queue` |
@@ -259,7 +263,9 @@ The hub:
 
 1. takes the source's last state and works out its position now;
 2. sends the destination a `setQueue` with that queue, index and position (ids translated,
-   [section 8](#8-ids-across-apis));
+   [section 8](#8-ids-across-apis)), and its `repeat`, `shuffle` and `order`, so that the music goes
+   on as it played: repeating as it did, shuffled in the same order, which shuffle going off takes
+   back on the destination too;
 3. if that worked and the source is online, sends it a `stop` (a `pause`, if it plays and takes no
    `stop`), so that it is left idle, not paused with music that now plays elsewhere (best effort:
    the music has already moved);
@@ -293,9 +299,10 @@ device that holds it, empty when none does; `deviceName` says where it was playe
 ```
 
 An app that opens with nothing playing anywhere shows it: on the device that holds it, if one does
-(it is then online, and the app controls it); otherwise here, loaded paused at the same point, so
-that play continues it here. Loading it doesn't take it over: until some device plays, every app
-that opens shows it the same way, on its own.
+(it is then online, and the app controls it); otherwise here, loaded paused at the same point, in
+the same modes (`repeat`, `shuffle` and its `order`), so that play continues it here. Loading it
+doesn't take it over: until some device plays, every app that opens shows it the same way, on its
+own.
 
 ## 8. Ids across APIs
 
@@ -383,8 +390,6 @@ Navidrome's Jellyfin API counts a play when a track stops past half of it or fou
 
 - User identity across APIs on servers other than Navidrome (Jellyfin with a Subsonic plugin, for
   instance), where user names may not match.
-- Repeat and shuffle on a transfer: `setQueue` carries the queue in its play order, but neither
-  mode, so the destination keeps its own.
 - Group playback ("Jam"): one queue, several devices listening. It would need a way out of "one
   device plays at a time" (section 4) for the devices in the group.
 - Advertising the hub: an OpenSubsonic extension and a Jellyfin plugin, instead of the `/connect`
