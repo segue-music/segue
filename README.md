@@ -33,7 +33,8 @@ and the messages are in [SPEC.md](SPEC.md).
 
 **Status: skeleton.** The protocol is a first draft. The hub works in its tests and with the
 first client, an app of its own ([segue-app](https://github.com/segue-music/segue-app)); both
-have run next to a real Navidrome since 2026-10-03.
+have run next to a real Navidrome since 2026-10-03. The app isn't released: its Android APK is
+signed with a debug key and in no store, and its Linux build is only a tarball.
 
 ## Layout
 
