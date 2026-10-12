@@ -1,4 +1,4 @@
-<p align="center"><img src="icon.png" alt="" width="128"></p>
+<p align="center"><img src="icon.png" alt="" width="160"></p>
 
 <h1 align="center">Segue</h1>
 
