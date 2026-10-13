@@ -99,6 +99,12 @@ listens on `0.0.0.0:8480`.
 4. Propose it: an OpenSubsonic discussion (next to
    [#277](https://github.com/opensubsonic/open-subsonic-api/discussions/277)), Navidrome, and the
    open-source apps.
+5. Internet radios (Navidrome's `getInternetRadioStations`), in the app and in the protocol, so that
+   a station moves between devices as a queue does: a queue item of `"kind": "radio"`, alone in its
+   queue, with the station's `streamUrl` (Navidrome's Jellyfin API has no radios, so the id can't be
+   translated) and what it plays now (ICY `StreamTitle`). It has no position, so no `seek`, `next`
+   or `previous`; a `playsRadio` in the `hello` keeps it from apps that can't play it; the hub
+   doesn't report it to the media server (section 12); and a player opens only `http` and `https`.
 
 ## License
 
