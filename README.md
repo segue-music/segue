@@ -97,8 +97,10 @@ listens on `0.0.0.0:8480`.
 3. Try the app on a real Jellyfin server and on Navidrome's Jellyfin API: that Navidrome's two APIs
    give the same user names, and that the ids translate on real items.
 4. Propose it: an OpenSubsonic discussion (next to
-   [#277](https://github.com/opensubsonic/open-subsonic-api/discussions/277)), Navidrome, and the
-   open-source apps.
+   [#277](https://github.com/opensubsonic/open-subsonic-api/discussions/277)) and the open-source
+   apps. Navidrome has it as design input
+   ([#5154](https://github.com/navidrome/navidrome/discussions/5154#discussioncomment-18927485)):
+   its maintainer plans this in Navidrome's own API.
 5. Internet radios (Navidrome's `getInternetRadioStations`), in the app and in the protocol, so that
    a station moves between devices as a queue does: a queue item of `"kind": "radio"`, alone in its
    queue, with the station's `streamUrl` (Navidrome's Jellyfin API has no radios, so the id can't be

@@ -1,10 +1,11 @@
 # Segue protocol, version 1 (draft)
 
-Status: **draft 0**, 2026-10-03. Not proposed anywhere yet. This repository has a reference hub
-(`hub/`, Go), and the first client is an app in Flutter
-([segue-app](https://github.com/segue-music/segue-app)). Where this text and their protocol
-code disagree, that is a bug in one of them. [IMPLEMENTING.md](IMPLEMENTING.md) goes through the
-app's side of it.
+Status: **draft 0**, 2026-10-03. Offered to Navidrome as design input on 2026-10-14
+([discussion #5154](https://github.com/navidrome/navidrome/discussions/5154#discussioncomment-18927485)),
+and not proposed elsewhere yet. This repository has a reference hub (`hub/`, Go), and the first
+client is an app in Flutter ([segue-app](https://github.com/segue-music/segue-app)). Where this
+text and their protocol code disagree, that is a bug in one of them.
+[IMPLEMENTING.md](IMPLEMENTING.md) goes through the app's side of it.
 
 ## The problem
 
