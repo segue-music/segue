@@ -32,7 +32,7 @@ The OpenSubsonic discussion about a "Jam" function
 - No accounts of its own: a device signs in with the credentials it already uses with the media
   server.
 - Works next to a server that knows nothing about it (a companion "hub"), and can later be built
-  into a server.
+  into a server ([section 13](#13-inside-a-media-server)).
 - Items are the media server's ids, and audio still comes from the media server: the hub never
   streams.
 - Small enough to add to an app in a few hundred lines.
@@ -70,8 +70,9 @@ WebSocket at `.../connect/v1/ws`. The server's admin publishes the hub by routin
 the media server's origin to it. Clients should also accept a hub URL typed by the user, and probe
 once per sign-in, not on every request.
 
-A server that implements the hub itself could advertise it instead, for instance as an OpenSubsonic
-extension in `getOpenSubsonicExtensions` ([open questions](#13-open-questions)).
+A server that implements the hub itself ([section 13](#13-inside-a-media-server)) answers at the same
+place, and could also advertise it, for instance as an OpenSubsonic extension in
+`getOpenSubsonicExtensions` ([open questions](#14-open-questions)).
 
 ## 2. Connection and authentication
 
@@ -345,7 +346,7 @@ The hub only routes messages, so other programs can register devices of their ow
 - an observer that lists apps not speaking the protocol, by polling the server's now-playing data
   (`getNowPlaying`, Jellyfin's `/Sessions`), as devices with no capabilities, leaving out what the
   hub reported itself ([section 12](#12-the-media-servers-now-playing));
-- a media server that implements the hub itself.
+- a media server that implements the hub itself ([section 13](#13-inside-a-media-server)).
 
 ## 12. The media server's now playing
 
@@ -384,9 +385,34 @@ by a transfer counts on a device only for what that device played. Jellyfin coun
 `Sessions/Playing/Progress` for one that it hears of later (moved from another device, or the device
 back online), which shows it without counting.
 Navidrome's Jellyfin API counts a play when a track stops past half of it or four minutes
-([open questions](#13-open-questions)).
+([open questions](#14-open-questions)).
 
-## 13. Open questions
+## 13. Inside a media server
+
+The hub runs next to a media server that knows nothing about it, but a media server can also be the
+hub itself. The messages stay the same, so an app works with either without knowing which, and finds
+it the same way: the server answers `/connect/v1/info` and the WebSocket on its own origin
+([section 1](#1-discovery)). What changes is everything the hub had to ask the media server:
+
+- **Sign-in**: the server checks the `hello`'s `auth` against its own users. It makes no request
+  and keeps no cache, and `1011` (the media server didn't answer) doesn't happen. A server with an
+  API of its own can add a `scheme` for its credentials and, if that API's ids aren't those of the
+  Subsonic or the Jellyfin API, an `api` for them.
+- **Ids** ([section 8](#8-ids-across-apis)): the server knows every form of its own ids, so each
+  item reaches each device in that device's API.
+- **Now playing** ([section 12](#12-the-media-servers-now-playing)): the server puts each device's
+  playback in its now playing itself, under the device's name, and holds no credentials to do it.
+  What changes it, and how plays are counted, stay as section 12 says. Reporting an unchanged
+  playback again every minute is for Jellyfin's sessions, and isn't needed.
+- **Last playback** ([section 7](#7-last-playback)): kept with the user's other data.
+- **Its own player**: the server's web UI can be a device like any app, signing in with the session
+  it already has.
+
+The reference hub is a Go package whose checks, id translation and reports are pluggable
+(`Authenticate`, `Translate` and `Report` in its `Options`), so a server in Go can run it inside,
+with `Handler` under `/connect/`.
+
+## 14. Open questions
 
 - User identity across APIs on servers other than Navidrome (Jellyfin with a Subsonic plugin, for
   instance), where user names may not match.
