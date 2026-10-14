@@ -18,7 +18,7 @@ A device is a **controller**, a **player**, or both ([overview](SPEC.md#overview
 
 Audio still comes from the media server, with the ids the app already uses. The hub only relays
 messages. The reference app's whole side of the protocol, discovery, messages and connection, is
-about 700 lines of Dart (`lib/segue/`), plus 360 for the behaviour in [section 7](#7-behave-like-the-other-apps)
+about 850 lines of Dart (`lib/segue/`), plus 550 for the behaviour in [section 7](#7-behave-like-the-other-apps)
 (`lib/connect/connect.dart`).
 
 ## 1. Find the hub
