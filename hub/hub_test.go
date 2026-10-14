@@ -699,6 +699,126 @@ func TestContinueHereFromAnOfflineDevice(t *testing.T) {
 	}
 }
 
+func TestTransferWithoutASourceTakesTheLastPlayback(t *testing.T) {
+	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
+	url, _ := startHub(t, Options{Now: c.Now})
+	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
+	stateFrom := func(d *testDevice, id string) {
+		t.Helper()
+
+		for d.expect("state").DeviceID != id {
+		}
+	}
+
+	pc.send(map[string]any{"type": "transfer", "id": "t0", "to": "tv"})
+
+	if r := pc.expect("result"); r.Error != "nothingToTransfer" {
+		t.Fatalf("with no last playback: %+v", r)
+	}
+
+	phone.report(map[string]any{"status": "playing", "positionMs": 30000, "index": 1, "queue": songs, "repeat": "all"})
+	stateFrom(pc, "phone")
+	c.advance(200 * time.Millisecond)
+
+	// The phone holds it: its queue moves from where it is now, as if from named it.
+	pc.send(map[string]any{"type": "transfer", "id": "t1", "to": "tv"})
+
+	got := tv.obey("")
+	if got.Action != ActSetQueue || *got.Index != 1 || *got.PositionMs != 30200 || !*got.Play || got.Repeat != RepeatAll {
+		t.Fatalf("the TV got %+v", got)
+	}
+
+	if got.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" {
+		t.Fatalf("queue %+v", got.Queue)
+	}
+
+	if stopped := phone.obey(""); stopped.Action != ActStop {
+		t.Fatalf("the phone got %+v", stopped)
+	}
+
+	if r := pc.expect("result"); r.Re != "t1" || !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+
+	phone.report(map[string]any{"status": "stopped", "positionMs": 30200})
+	stateFrom(pc, "phone")
+	tv.report(map[string]any{"status": "playing", "positionMs": 30200, "index": 1, "queue": songs})
+	stateFrom(pc, "tv")
+
+	// The TV holds it now, so the music is already there: a result, and no command.
+	pc.send(map[string]any{"type": "transfer", "id": "t2", "to": "tv"})
+
+	if r := pc.expect("result"); r.Re != "t2" || !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+
+	tv.report(map[string]any{"status": "paused", "positionMs": 40000})
+	stateFrom(pc, "tv")
+	pc.send(map[string]any{"type": "transfer", "id": "t3", "to": "tv", "play": false})
+
+	if r := pc.expect("result"); r.Re != "t3" || !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+
+	// Paused there, it only needs to play.
+	pc.send(map[string]any{"type": "transfer", "id": "t4", "to": "tv"})
+
+	if got := tv.obey(""); got.Action != ActPlay {
+		t.Fatalf("the TV got %+v", got)
+	}
+
+	if r := pc.expect("result"); r.Re != "t4" || !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+}
+
+func TestTransferWithoutASourceAfterARestart(t *testing.T) {
+	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
+	path := filepath.Join(t.TempDir(), "last.json")
+	url, h := startHub(t, Options{Now: c.Now, StatePath: path})
+	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
+
+	phone.report(map[string]any{"status": "playing", "positionMs": 30000, "index": 1, "queue": songs})
+	time.Sleep(50 * time.Millisecond) // the report reaches the hub
+	h.Close()
+
+	// The hub went down with the phone playing. Back an hour later, it has no device, and the last
+	// playback's clock stopped where the phone last reported.
+	c.advance(time.Hour)
+
+	url2, _ := startHub(t, Options{Now: c.Now, StatePath: path})
+	tv, welcome := join(t, url2, as("alice"), info("tv", Subsonic, player, everything...))
+
+	if last := welcome.LastPlayback; last == nil || last.State.Status != Paused || last.State.PositionMs != 30000 {
+		t.Fatalf("last playback after a restart %+v", last)
+	}
+
+	tv.send(map[string]any{"type": "transfer", "id": "t1", "from": "phone", "to": "tv"})
+
+	if r := tv.expect("result"); r.Error != "unknownDevice" {
+		t.Fatalf("result %+v", r)
+	}
+
+	// Without a source, the last playback itself moves, with no device to stop.
+	tv.send(map[string]any{"type": "transfer", "id": "t2", "to": "tv"})
+
+	got := tv.obey("")
+	if got.Action != ActSetQueue || *got.Index != 1 || *got.PositionMs != 30000 || !*got.Play {
+		t.Fatalf("the TV got %+v", got)
+	}
+
+	if got.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" {
+		t.Fatalf("queue %+v", got.Queue)
+	}
+
+	if r := tv.expect("result"); r.Re != "t2" || !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+}
+
 func TestReconnectReplacesTheOldConnection(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))

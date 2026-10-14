@@ -109,9 +109,11 @@ func New(opts Options) *Hub {
 	if opts.StatePath != "" {
 		h.store, h.last = openStore(opts.StatePath, log)
 
-		// No device is connected yet, so none holds a last playback (SPEC.md, section 7).
+		// No device is connected yet, so none holds a last playback, and its clock has stopped
+		// (SPEC.md, section 7): where the last report put it, since how long it played on is unknown.
 		for _, last := range h.last {
 			last.DeviceID = ""
+			last.State.pause(last.State.At)
 		}
 	}
 
@@ -447,7 +449,7 @@ func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 }
 
 // onTransfer hands the source's queue, at its current position and in its modes, to the
-// destination, then pauses the source.
+// destination, then stops the source. Without a source, it is the user's last playback.
 func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	if msg.ID == "" {
 		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
@@ -461,21 +463,41 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	devices := h.users[e.user]
 	source, destination := devices[msg.From], devices[msg.To]
 	from := e.info.ID
+	play := msg.Play == nil || *msg.Play
+
+	var state *StampedState // what moves: the source's, or the last playback's
+	var sourceAPI API
+
+	if source != nil {
+		state, sourceAPI = source.state, source.info.API
+	} else if last := h.last[e.user]; msg.From == "" && last != nil {
+		// The device that holds it, as if from named it, or, when none does, the last playback
+		// itself, its clock stopped, with no device to stop (SPEC.md, section 6).
+		source = devices[last.DeviceID]
+		state, sourceAPI = &last.State, last.API
+
+		if source != nil {
+			state = source.state
+		}
+	}
 
 	var handoff Command
-	var sourceAPI API
 	var problem string
 
 	switch {
-	case source == nil || destination == nil:
+	case destination == nil || (source == nil && msg.From != ""):
 		problem = codeUnknownDevice
-	case source == destination:
+	case source == destination && msg.From != "":
 		problem = codeBadMessage
 	// An offline source still has its last state: the queue of a closed app can be picked up.
-	case source.state == nil || len(source.state.Queue) == 0:
+	case state == nil || len(state.Queue) == 0:
 		problem = codeNothingToTransfer
+	case source == destination:
+		// Without a source, the destination holds the last playback: the music is already there.
+		if play && state.Status != Playing {
+			handoff = Command{Action: ActPlay}
+		}
 	default:
-		state := source.state
 		index := 0
 
 		if state.Index != nil {
@@ -483,24 +505,26 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 		}
 
 		position := state.positionAt(h.opts.Now().UnixMilli())
-		play := msg.Play == nil || *msg.Play
 		// With the modes it played in, shuffled in the same order, which shuffle going off takes back.
 		handoff = Command{
 			Action: ActSetQueue, Queue: state.Queue, Index: &index, PositionMs: &position, Play: &play,
 			Repeat: state.Repeat, Shuffle: state.Shuffle, Order: state.Order,
 		}
-		sourceAPI = source.info.API
 	}
 
 	h.mu.Unlock()
 
-	if problem != "" {
+	switch {
+	case problem != "":
 		reply(outcome{err: problem})
+		return
+	case handoff.Action == "":
+		reply(outcome{ok: true})
 		return
 	}
 
 	o := h.request(destination, handoff, sourceAPI, from)
-	if o.ok && source != destination {
+	if o.ok && source != nil && source != destination {
 		h.mu.Lock()
 
 		var command Command

@@ -139,7 +139,9 @@ Then, if you are a player, report your full state ([section 4](#4-report-as-a-pl
 - Turn the hub's errors into words for the user (`offline`, `timeout`, `unsupported`,
   `nothingToTransfer`...). The reference app's `describeError` (`lib/ui/errors.dart`) is a list of them.
 - `transfer` moves the music. `to` can be your own device ("continue here"), and `from` can be
-  offline, since its last state is enough.
+  offline, since its last state is enough. Without `from`, the hub moves the last playback, from
+  the device that holds it or from its own record: a button or a script can then move the music
+  without keeping the device list.
 
 ## 7. Behave like the other apps
 

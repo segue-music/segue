@@ -279,6 +279,14 @@ The hub:
 The source may be offline: its last state is enough. The destination may be the device asking,
 which is "continue here".
 
+Without `from`, the source is the user's last playback ([section 7](#7-last-playback)): the device
+that holds it, as if `from` named it, or, when none does, the last playback itself, its clock
+stopped, which leaves no device to stop. So a client that keeps no device list can still say
+"continue here" or "play it on the TV", and the last playback can still be moved after its device
+is gone (expired, or forgotten by a restart of the hub). When the destination itself holds it, the
+music is already there: the hub answers `ok`, after sending it a `play` if `play` asks for it and
+it doesn't play. With no last playback, the answer is `nothingToTransfer`.
+
 ## 7. Last playback
 
 The hub keeps, for each user, the **last playback**: the state of the device that played last, so
@@ -292,7 +300,8 @@ record, separate from the devices' states:
   becomes where playback had got to, and the status `paused`), and no device holds it until one
   plays. Coming back online doesn't give it back;
 - the reference hub can keep it on disk, so that it survives a restart. A restart disconnects every
-  device, so after one no device holds it.
+  device, so after one no device holds it, and its clock has stopped where the last report put it,
+  since the hub can't tell how long it played on.
 
 `welcome` carries it, with the queue in the device's API, when there is one. `deviceId` is the
 device that holds it, empty when none does; `deviceName` says where it was played:
@@ -306,7 +315,8 @@ An app that opens with nothing playing anywhere shows it: on the device that hol
 (it is then online, and the app controls it); otherwise here, loaded paused at the same point, in
 the same modes (`repeat`, `shuffle` and its `order`), so that play continues it here. Loading it
 doesn't take it over: until some device plays, every app that opens shows it the same way, on its
-own.
+own. A controller can also send it to any player, with a `transfer` without `from`
+([section 6](#6-transfer)).
 
 ## 8. Ids across APIs
 
