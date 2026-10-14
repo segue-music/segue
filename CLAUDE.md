@@ -16,7 +16,7 @@ repository, `github.com/segue-music/segue-app`, usually cloned next to this one 
 `../segue-app`. Its side of the protocol is in its `lib/segue/`, so a protocol change is a commit
 in each repository. It lived here in `app/` until 2026-10-05, and took its history along.
 
-A TypeScript reference client used to live in `client/`; `git checkout c22dc7b -- client` restores it.
+A TypeScript reference client used to live in `client/`; `git checkout 3a9604b -- client` restores it.
 
 ## Commands (Go 1.27)
 

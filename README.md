@@ -55,7 +55,7 @@ The app, a music player for Navidrome, other OpenSubsonic servers and Jellyfin i
 protocol in Dart (`lib/segue/`). It lived here, in `app/`, until 2026-10-05. A client in another
 language follows `SPEC.md`, and [IMPLEMENTING.md](IMPLEMENTING.md) walks through it. A reference
 client in TypeScript, for apps like Feishin and Jellify, lived in `client/` until 2026-10-03:
-`git checkout c22dc7b -- client` brings it back.
+`git checkout 3a9604b -- client` brings it back.
 
 ## Hub
 
