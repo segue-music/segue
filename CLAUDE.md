@@ -37,6 +37,11 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/src -w /src -e HOME=/tmp golan
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/src -w /src -e HOME=/tmp -e CGO_ENABLED=0 golang:1.27 go build -o segue-hub ./cmd/segue-hub
 ```
 
+The image (`hub/Dockerfile`) is `scratch` with the binary, cross-compiled for each platform, and a
+`/data` folder that its user, 65532, owns, where `SEGUE_STATE` points.
+`.github/workflows/hub-image.yml` publishes it as `ghcr.io/segue-music/segue-hub` (amd64, arm64,
+armv7) on each push to `main` that changes `hub/`, after `go vet`, `gofmt` and the tests.
+
 Configuration is all environment variables (`SEGUE_UPSTREAM`, `SEGUE_LISTEN`, `SEGUE_STATE`,
 `SEGUE_AUTH`); see the table in `README.md`. The hub asks `SEGUE_UPSTREAM` what it is at startup
 (`DetectUpstream`), and waits for it to answer. `SEGUE_AUTH=none` accepts any device as the user it

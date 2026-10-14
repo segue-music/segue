@@ -210,6 +210,12 @@ names. Build it as in the [README](README.md#hub) and run:
 SEGUE_AUTH=none ./segue-hub
 ```
 
+Or, with Docker, without building it:
+
+```sh
+docker run --rm -p 127.0.0.1:8480:8480 -e SEGUE_AUTH=none ghcr.io/segue-music/segue-hub
+```
+
 Type `http://127.0.0.1:8480` as the hub's URL in your app, and sign in as some user, `alice`
 say. With any WebSocket client ([websocat](https://github.com/vi/websocat), for instance), you can
 then be alice's other device, one message per line:

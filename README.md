@@ -106,14 +106,22 @@ location /connect/ {
 }
 ```
 
-With Docker, the image listens on `0.0.0.0:8480`, and `SEGUE_UPSTREAM` is the media server as the
-container reaches it, such as by its name on a network they share:
+With Docker, the image `ghcr.io/segue-music/segue-hub`, for amd64, arm64 and armv7, listens on
+`0.0.0.0:8480` and keeps the last playbacks in `/data` (`SEGUE_STATE=/data/state.json`).
+`SEGUE_UPSTREAM` is the media server as the container reaches it, such as by its name on a network
+they share:
 
 ```sh
-docker build -t segue-hub hub/
 docker run -d --name segue-hub --restart unless-stopped --network <the media server's network> \
-  -p 127.0.0.1:8480:8480 -e SEGUE_UPSTREAM=http://navidrome:4533 segue-hub
+  -p 127.0.0.1:8480:8480 -v segue-hub:/data -e SEGUE_UPSTREAM=http://navidrome:4533 \
+  ghcr.io/segue-music/segue-hub
 ```
+
+A named volume, as here, keeps the last playbacks when the container is made again; a folder of the
+host mounted at `/data` instead has to be one that user 65532, the image's, can write. Each push to
+`main` that changes the hub publishes the image again, once its tests pass, as `latest` and as
+`sha-<commit>` (`.github/workflows/hub-image.yml`). `docker build -t segue-hub hub/` builds the same
+image from this repository.
 
 ## Next steps
 
