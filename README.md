@@ -31,11 +31,12 @@ signs devices in with the credentials they already use with the media server, ke
 each player, and routes commands. Audio still comes from the media server. The problem, the design
 and the messages are in [SPEC.md](SPEC.md).
 
-**Status: skeleton.** The protocol is a first draft. The hub works in its tests and with the
-first client, an app of its own ([segue-app](https://github.com/segue-music/segue-app)); both
-have run next to a real Navidrome since 2026-10-03. The app isn't released: its Android APK, in no
-store, its Linux tarball and its Windows zip are only in its repository's releases, and its iOS
-build reaches only TestFlight's internal group.
+**Status: early.** The protocol is a first draft. The hub works in its tests and with the first
+client, an app of its own ([segue-app](https://github.com/segue-music/segue-app)); both have run
+next to a real Navidrome since 2026-10-03. The app is in no store yet: its builds for Android,
+Linux and Windows are in its
+[latest release](https://github.com/segue-music/segue-app/releases/latest), and its iOS build
+reaches only TestFlight's internal group.
 
 ## Layout
 
@@ -52,10 +53,8 @@ one static binary: an 11 MB image, using about 2 MB of RAM when idle.
 The app, a music player for Navidrome, other OpenSubsonic servers and Jellyfin in Flutter
 (Linux, Windows, macOS, Android, iOS), is in its own repository,
 [segue-music/segue-app](https://github.com/segue-music/segue-app), with its side of the
-protocol in Dart (`lib/segue/`). It lived here, in `app/`, until 2026-10-05. A client in another
-language follows `SPEC.md`, and [IMPLEMENTING.md](IMPLEMENTING.md) walks through it. A reference
-client in TypeScript, for apps like Feishin and Jellify, lived in `client/` until 2026-10-03:
-`git checkout 3a9604b -- client` brings it back.
+protocol in Dart (`lib/segue/`). A client in another language follows `SPEC.md`, and
+[IMPLEMENTING.md](IMPLEMENTING.md) walks through it.
 
 ## Hub
 
@@ -82,25 +81,52 @@ server has it, and counts no plays. In Jellyfin's it uses the sessions API, and 
 play for each track that starts from its start. With `SEGUE_AUTH=none` it reports nothing.
 
 Clients find the hub at `/connect/` on the media server's origin, so route that path there in the
-reverse proxy. It must be `https`, because devices send their credentials.
+reverse proxy, its WebSocket too. It must be `https`, because devices send their credentials. The
+hub answers there whether the proxy strips the prefix or not. With Caddy, next to Navidrome:
 
-With Docker: `docker build -t segue-hub hub/`, then run it with the variables above. The image
-listens on `0.0.0.0:8480`.
+```caddyfile
+music.example {
+	handle /connect/* {
+		reverse_proxy 127.0.0.1:8480
+	}
+	handle {
+		reverse_proxy 127.0.0.1:4533
+	}
+}
+```
+
+With nginx, in the media server's `server` block:
+
+```nginx
+location /connect/ {
+    proxy_pass http://127.0.0.1:8480;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+
+With Docker, the image listens on `0.0.0.0:8480`, and `SEGUE_UPSTREAM` is the media server as the
+container reaches it, such as by its name on a network they share:
+
+```sh
+docker build -t segue-hub hub/
+docker run -d --name segue-hub --restart unless-stopped --network <the media server's network> \
+  -p 127.0.0.1:8480:8480 -e SEGUE_UPSTREAM=http://navidrome:4533 segue-hub
+```
 
 ## Next steps
 
-1. The app: trying the iOS build on an iPhone and in a car (see
-   [segue-app](https://github.com/segue-music/segue-app)).
-2. An observer that lists apps that don't speak the protocol (from `getNowPlaying`, leaving out what
+1. An observer that lists apps that don't speak the protocol (from `getNowPlaying`, leaving out what
    the hub reports itself), as devices that can be seen but not commanded. That covers apps like
    Symfonium, which is closed source.
-3. Try the app on a real Jellyfin server and on Navidrome's Jellyfin API: that Navidrome's two APIs
+2. Try the app on a real Jellyfin server and on Navidrome's Jellyfin API: that Navidrome's two APIs
    give the same user names, and that the ids translate on real items.
-4. Propose it to the open-source apps. It went to Navidrome as design input
+3. Propose it to the open-source apps. It went to Navidrome as design input
    ([#5154](https://github.com/navidrome/navidrome/discussions/5154#discussioncomment-18927485)),
    whose maintainer plans this in Navidrome's own API, and to OpenSubsonic's app and server
    developers ([#283](https://github.com/opensubsonic/open-subsonic-api/discussions/283)).
-5. Internet radios (Navidrome's `getInternetRadioStations`), in the app and in the protocol, so that
+4. Internet radios (Navidrome's `getInternetRadioStations`), in the app and in the protocol, so that
    a station moves between devices as a queue does: a queue item of `"kind": "radio"`, alone in its
    queue, with the station's `streamUrl` (Navidrome's Jellyfin API has no radios, so the id can't be
    translated) and what it plays now (ICY `StreamTitle`). It has no position, so no `seek`, `next`
