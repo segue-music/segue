@@ -30,9 +30,11 @@ var upgrader = websocket.Upgrader{
 // encode as JSON.
 func (h *Hub) Handler(info map[string]any) http.Handler {
 	fields := map[string]any{}
+
 	for k, v := range info {
 		fields[k] = v
 	}
+
 	fields["protocol"], fields["versions"] = "segue", []int{ProtocolVersion}
 	infoJSON, err := json.Marshal(fields)
 	if err != nil {
@@ -43,42 +45,53 @@ func (h *Hub) Handler(info map[string]any) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(infoJSON)
 	}
+
 	serveWS := func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return // Upgrade has already answered with the error
 		}
+
 		h.serve(r, ws)
 	}
+
 	mux := http.NewServeMux()
+
 	for _, prefix := range []string{"", "/connect"} {
 		// GET also takes HEAD, and the mux answers other methods with a 405 and Allow. The
 		// WebSocket has no method: Upgrade answers whatever isn't a handshake.
 		mux.HandleFunc("GET "+prefix+"/v1/info", serveInfo)
 		mux.HandleFunc(prefix+"/v1/ws", serveWS)
 	}
+
 	return mux
 }
 
 // serve runs one connection: a goroutine writes (messages and pings), this one reads.
 func (h *Hub) serve(r *http.Request, ws *websocket.Conn) {
 	c := &wsConn{ws: ws, out: make(chan frame, sendBuffer), done: make(chan struct{})}
+
 	go c.writeLoop()
+
 	session := h.Open(c)
 
 	ws.SetReadLimit(maxFrameLen)
 	_ = ws.SetReadDeadline(time.Now().Add(pongWait))
 	ws.SetPongHandler(func(string) error { return ws.SetReadDeadline(time.Now().Add(pongWait)) })
+
 	for {
 		kind, data, err := ws.ReadMessage()
 		if err != nil {
 			break
 		}
+
 		_ = ws.SetReadDeadline(time.Now().Add(pongWait))
+
 		if kind == websocket.TextMessage {
 			session.Message(r.Context(), data)
 		}
 	}
+
 	close(c.done)
 	_ = ws.Close()
 	session.Closed()
@@ -104,6 +117,7 @@ func (c *wsConn) Send(msg any) {
 	if err != nil {
 		panic(err) // the hub only sends its own message types, which always marshal
 	}
+
 	c.enqueue(frame{data: data})
 }
 
@@ -124,6 +138,7 @@ func (c *wsConn) enqueue(f frame) {
 func (c *wsConn) writeLoop() {
 	ping := time.NewTicker(pingEvery)
 	defer ping.Stop()
+
 	for {
 		select {
 		case <-c.done:
@@ -136,7 +151,9 @@ func (c *wsConn) writeLoop() {
 				time.AfterFunc(closeGrace, func() { _ = c.ws.Close() })
 				return
 			}
+
 			_ = c.ws.SetWriteDeadline(time.Now().Add(writeWait))
+
 			if c.ws.WriteMessage(websocket.TextMessage, f.data) != nil {
 				_ = c.ws.Close()
 				return

@@ -28,10 +28,12 @@ func (h *Hub) noteLastPlayback(e *entry) {
 	if state == nil || len(state.Queue) == 0 {
 		return
 	}
+
 	last := h.last[e.user]
 	if state.Status != Playing && (last == nil || last.DeviceID != e.info.ID) {
 		return
 	}
+
 	h.last[e.user] = &lastPlayback{DeviceID: e.info.ID, DeviceName: e.info.Name, API: e.info.API, State: *state}
 	h.saveLast()
 }
@@ -45,6 +47,7 @@ func (h *Hub) releaseLastPlayback(e *entry) {
 	if last == nil || last.DeviceID != e.info.ID {
 		return
 	}
+
 	last.State.pause(h.opts.Now().UnixMilli())
 	last.DeviceID = ""
 	h.saveLast()
@@ -55,11 +58,13 @@ func (h *Hub) saveLast() {
 	if h.store == nil {
 		return
 	}
+
 	data, err := json.Marshal(h.last)
 	if err != nil {
 		h.log.Error("can't encode the last playbacks", "err", err)
 		return
 	}
+
 	h.store.save(data)
 }
 
@@ -69,6 +74,7 @@ func (h *Hub) Close() {
 	if h.store != nil {
 		h.store.close()
 	}
+
 	if h.reports != nil {
 		h.stopReportingAgain()
 		h.reports.close()
@@ -92,6 +98,7 @@ type store struct {
 func openStore(path string, log *slog.Logger) (*store, map[string]*lastPlayback) {
 	last := map[string]*lastPlayback{}
 	data, err := os.ReadFile(path)
+
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
@@ -102,11 +109,14 @@ func openStore(path string, log *slog.Logger) (*store, map[string]*lastPlayback)
 			last = map[string]*lastPlayback{}
 		}
 	}
+
 	s := &store{
 		path: path, log: log,
 		wake: make(chan struct{}, 1), done: make(chan struct{}), stopped: make(chan struct{}),
 	}
+
 	go s.run()
+
 	return s, last
 }
 
@@ -114,6 +124,7 @@ func (s *store) save(data []byte) {
 	s.mu.Lock()
 	s.pending = data
 	s.mu.Unlock()
+
 	select {
 	case s.wake <- struct{}{}:
 	default: // a write is already due, and it will take this version
@@ -122,6 +133,7 @@ func (s *store) save(data []byte) {
 
 func (s *store) run() {
 	defer close(s.stopped)
+
 	for {
 		select {
 		case <-s.wake:
@@ -135,18 +147,23 @@ func (s *store) run() {
 
 func (s *store) flush() {
 	s.mu.Lock()
+
 	data := s.pending
 	s.pending = nil
 	s.mu.Unlock()
+
 	if data == nil {
 		return
 	}
+
 	// Written whole to a temporary file and renamed, so a crash never leaves half a file.
 	tmp := filepath.Join(filepath.Dir(s.path), "."+filepath.Base(s.path)+".tmp")
+
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		s.log.Error("can't write the last playbacks", "path", tmp, "err", err)
 		return
 	}
+
 	if err := os.Rename(tmp, s.path); err != nil {
 		s.log.Error("can't write the last playbacks", "path", s.path, "err", err)
 	}

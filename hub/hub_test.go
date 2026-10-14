@@ -50,6 +50,7 @@ type clock struct {
 func (c *clock) Now() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	return c.now
 }
 
@@ -66,16 +67,23 @@ var byUsername Authenticator = func(_ context.Context, a Auth) (string, bool, er
 
 func startHub(t *testing.T, opts Options) (string, *Hub) {
 	t.Helper()
+
 	if opts.Authenticate == nil {
 		opts.Authenticate = byUsername
 	}
+
 	if opts.Translate == nil {
 		opts.Translate = NavidromeIDs
 	}
+
 	h := New(opts)
+
 	t.Cleanup(h.Close)
+
 	server := httptest.NewServer(h.Handler(nil))
+
 	t.Cleanup(server.Close)
+
 	return "ws" + strings.TrimPrefix(server.URL, "http") + "/v1/ws", h
 }
 
@@ -94,11 +102,14 @@ func as(user string) Auth { return Auth{Scheme: "subsonic", Username: user, Toke
 // dial connects and sends the hello. It doesn't wait for the welcome.
 func dial(t *testing.T, url string, auth Auth, device DeviceInfo) *testDevice {
 	t.Helper()
+
 	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	d := &testDevice{t: t, ws: ws, msgs: make(chan received, 100), closed: make(chan int, 1)}
+
 	t.Cleanup(func() { _ = ws.Close() })
 	go func() {
 		for {
@@ -108,29 +119,37 @@ func dial(t *testing.T, url string, auth Auth, device DeviceInfo) *testDevice {
 				if errors.As(err, &closeErr) {
 					d.closed <- closeErr.Code
 				}
+
 				close(d.msgs)
 				return
 			}
+
 			var msg received
+
 			if err := json.Unmarshal(data, &msg); err != nil {
 				t.Errorf("undecodable message %s: %v", data, err)
 			}
+
 			d.msgs <- msg
 		}
 	}()
 	d.send(map[string]any{"type": "hello", "protocol": ProtocolVersion, "auth": auth, "device": device})
+
 	return d
 }
 
 // join connects and waits for the welcome.
 func join(t *testing.T, url string, auth Auth, device DeviceInfo) (*testDevice, received) {
 	t.Helper()
+
 	d := dial(t, url, auth, device)
+
 	return d, d.expect("welcome")
 }
 
 func (d *testDevice) send(msg any) {
 	d.t.Helper()
+
 	if err := d.ws.WriteJSON(msg); err != nil {
 		d.t.Fatal(err)
 	}
@@ -139,13 +158,16 @@ func (d *testDevice) send(msg any) {
 // expect returns the next message of a type, skipping others.
 func (d *testDevice) expect(typ string) received {
 	d.t.Helper()
+
 	timeout := time.After(2 * time.Second)
+
 	for {
 		select {
 		case msg, ok := <-d.msgs:
 			if !ok {
 				d.t.Fatalf("connection closed while waiting for %q", typ)
 			}
+
 			if msg.Type == typ {
 				return msg
 			}
@@ -158,6 +180,7 @@ func (d *testDevice) expect(typ string) received {
 // expectDevice waits for news of a device that satisfies a condition.
 func (d *testDevice) expectDevice(id string, ok func(Device) bool) Device {
 	d.t.Helper()
+
 	for {
 		msg := d.expect("device")
 		if msg.Device.ID == id && ok(msg.Device) {
@@ -168,6 +191,7 @@ func (d *testDevice) expectDevice(id string, ok func(Device) bool) Device {
 
 func (d *testDevice) expectClose() int {
 	d.t.Helper()
+
 	select {
 	case code := <-d.closed:
 		return code
@@ -180,8 +204,11 @@ func (d *testDevice) expectClose() int {
 // obey answers the next command with ok (or the error) and returns it.
 func (d *testDevice) obey(err string) Command {
 	d.t.Helper()
+
 	msg := d.expect("command")
+
 	d.send(map[string]any{"type": "result", "re": msg.ID, "ok": err == "", "error": err})
+
 	return msg.Command
 }
 
@@ -196,6 +223,7 @@ var songs = []map[string]any{
 
 func TestRejectedCredentials(t *testing.T) {
 	url, _ := startHub(t, Options{Authenticate: func(context.Context, Auth) (string, bool, error) { return "", false, nil }})
+
 	if code := dial(t, url, as("alice"), info("phone", Subsonic, player)).expectClose(); code != CloseUnauthorized {
 		t.Fatalf("close code %d, want %d", code, CloseUnauthorized)
 	}
@@ -205,6 +233,7 @@ func TestMediaServerDown(t *testing.T) {
 	url, _ := startHub(t, Options{Authenticate: func(context.Context, Auth) (string, bool, error) {
 		return "", false, errors.New("connection refused")
 	}})
+
 	if code := dial(t, url, as("alice"), info("phone", Subsonic, player)).expectClose(); code != CloseUnavailable {
 		t.Fatalf("close code %d, want %d", code, CloseUnavailable)
 	}
@@ -212,6 +241,7 @@ func TestMediaServerDown(t *testing.T) {
 
 func TestFirstMessageMustBeAValidHello(t *testing.T) {
 	url, _ := startHub(t, Options{})
+
 	for name, hello := range map[string]any{
 		"not a hello":      map[string]any{"type": "state"},
 		"other protocol":   map[string]any{"type": "hello", "protocol": 2, "auth": as("alice"), "device": info("p", Subsonic, player)},
@@ -224,6 +254,7 @@ func TestFirstMessageMustBeAValidHello(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			defer ws.Close()
 			_ = ws.WriteJSON(hello)
 			_, _, err = ws.ReadMessage()
@@ -238,7 +269,9 @@ func TestFirstMessageMustBeAValidHello(t *testing.T) {
 func TestUnknownCapabilitiesAreDropped(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
 	join(t, url, as("alice"), info("tv", Subsonic, player, ActPlay, "dance"))
+
 	if d := pc.expectDevice("tv", func(d Device) bool { return d.Online }); !slices.Equal(d.Capabilities, []Action{ActPlay}) {
 		t.Fatalf("capabilities %v", d.Capabilities)
 	}
@@ -248,19 +281,25 @@ func TestRepeatAndShuffleInTheState(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs, "repeat": "all", "shuffle": true})
+
 	if got := pc.expect("state"); got.State.Repeat != RepeatAll || got.State.Shuffle == nil || !*got.State.Shuffle {
 		t.Fatalf("state %+v", got.State)
 	}
+
 	// A report without them keeps them.
 	tv.report(map[string]any{"status": "paused", "positionMs": 1000})
 	pc.expect("state")
+
 	_, welcome := join(t, url, as("alice"), info("laptop", Subsonic, controller))
 	tvState := welcome.Devices[slices.IndexFunc(welcome.Devices, func(d Device) bool { return d.ID == "tv" })].State
 	if tvState.Repeat != RepeatAll || tvState.Shuffle == nil || !*tvState.Shuffle {
 		t.Fatalf("the TV's state %+v", tvState)
 	}
+
 	tv.report(map[string]any{"status": "paused", "positionMs": 1000, "repeat": "twice"})
+
 	if got := tv.expect("error"); got.Error != "badMessage" {
 		t.Fatalf("got %+v", got)
 	}
@@ -268,12 +307,15 @@ func TestRepeatAndShuffleInTheState(t *testing.T) {
 
 func TestUsersSeeOnlyTheirOwnDevices(t *testing.T) {
 	url, _ := startHub(t, Options{})
+
 	join(t, url, as("alice"), info("alice-phone", Subsonic, player))
 	join(t, url, as("bob"), info("bob-phone", Subsonic, player))
+
 	pc, welcome := join(t, url, as("Alice"), info("alice-pc", Subsonic, controller)) // user names ignore case
 	if len(welcome.Devices) != 1 || welcome.Devices[0].ID != "alice-phone" || !welcome.Devices[0].Online {
 		t.Fatalf("welcome lists %+v", welcome.Devices)
 	}
+
 	join(t, url, as("alice"), info("alice-tv", Subsonic, player))
 	pc.expectDevice("alice-tv", func(d Device) bool { return d.Online })
 }
@@ -283,12 +325,14 @@ func TestStateIsStampedAndTranslated(t *testing.T) {
 	url, _ := startHub(t, Options{Now: c.Now})
 	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	phone.report(map[string]any{"status": "playing", "positionMs": 10000, "index": 0, "volume": 80, "queue": songs})
 
 	got := tv.expect("state")
 	if got.DeviceID != "phone" || got.State.At != 1_790_000_000_000 || got.State.Status != Playing || got.State.PositionMs != 10000 {
 		t.Fatalf("relayed %+v", got)
 	}
+
 	if got.State.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" || got.State.Queue[0].Title != "Dream On" {
 		t.Fatalf("queue %+v", got.State.Queue)
 	}
@@ -296,16 +340,21 @@ func TestStateIsStampedAndTranslated(t *testing.T) {
 	// A partial report changes only what it carries; a device joining later gets the merged state.
 	c.advance(time.Second)
 	phone.report(map[string]any{"status": "paused", "positionMs": 11000})
+
 	if partial := tv.expect("state"); partial.State.Queue != nil || partial.State.Status != Paused {
 		t.Fatalf("partial report relayed as %+v", partial.State)
 	}
+
 	_, welcome := join(t, url, as("alice"), info("pc", Jellyfin, controller))
+
 	var state *StampedState
+
 	for _, d := range welcome.Devices {
 		if d.ID == "phone" {
 			state = d.State
 		}
 	}
+
 	if state == nil || state.Status != Paused || state.PositionMs != 11000 || *state.Volume != 80 || state.Queue[0].ID != songs[0]["id"] {
 		t.Fatalf("merged state %+v", state)
 	}
@@ -314,25 +363,33 @@ func TestStateIsStampedAndTranslated(t *testing.T) {
 func TestTheOrderComesAndGoesWithTheQueue(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player))
+
 	order := func() []int {
 		_, welcome := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
 		for _, d := range welcome.Devices {
 			if d.ID == "phone" && d.State != nil {
 				return d.State.Order
 			}
 		}
+
 		return nil
 	}
 
 	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs, "shuffle": true, "order": []int{1, 0}})
+
 	if got := order(); !slices.Equal(got, []int{1, 0}) {
 		t.Fatalf("order %v", got)
 	}
+
 	phone.report(map[string]any{"status": "paused", "positionMs": 1000}) // the queue unchanged
+
 	if got := order(); !slices.Equal(got, []int{1, 0}) {
 		t.Fatalf("order %v, after a report without the queue", got)
 	}
+
 	phone.report(map[string]any{"status": "paused", "positionMs": 1000, "queue": songs, "shuffle": false})
+
 	if got := order(); got != nil {
 		t.Fatalf("order %v, after the queue came without one", got)
 	}
@@ -342,22 +399,30 @@ func TestBadStateReports(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player))
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
 	phone.report(map[string]any{"status": "playing"}) // no position
+
 	if msg := phone.expect("error"); msg.Error != "badMessage" {
 		t.Fatalf("got %+v", msg)
 	}
+
 	// An order that isn't each place of the queue once, or without the queue it orders.
 	for _, order := range [][]int{{0, 0}, {0, 2}, {0}} {
 		phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs, "shuffle": true, "order": order})
+
 		if msg := phone.expect("error"); msg.Error != "badMessage" {
 			t.Fatalf("order %v: got %+v", order, msg)
 		}
 	}
+
 	phone.report(map[string]any{"status": "playing", "positionMs": 0, "order": []int{1, 0}})
+
 	if msg := phone.expect("error"); msg.Error != "badMessage" {
 		t.Fatalf("got %+v", msg)
 	}
+
 	pc.report(map[string]any{"status": "playing", "positionMs": 0})
+
 	if msg := pc.expect("error"); msg.Error != "notPlayer" {
 		t.Fatalf("got %+v", msg)
 	}
@@ -370,42 +435,53 @@ func TestCommands(t *testing.T) {
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
 
 	pc.send(map[string]any{"type": "command", "id": "c1", "target": "tv", "command": map[string]any{"action": "seek", "positionMs": 90000}})
+
 	if got := tv.obey(""); got.Action != ActSeek || *got.PositionMs != 90000 {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	if r := pc.expect("result"); r.Re != "c1" || !r.OK {
 		t.Fatalf("result %+v", r)
 	}
 
 	pc.send(map[string]any{"type": "command", "id": "r", "target": "tv", "command": map[string]any{"action": "setRepeat", "repeat": "one"}})
+
 	if got := tv.obey(""); got.Action != ActSetRepeat || got.Repeat != RepeatOne {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	pc.expect("result")
 	pc.send(map[string]any{"type": "command", "id": "s", "target": "tv", "command": map[string]any{"action": "setShuffle", "shuffle": false}})
+
 	if got := tv.obey(""); got.Action != ActSetShuffle || got.Shuffle == nil || *got.Shuffle {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	pc.expect("result")
 
 	pc.send(map[string]any{"type": "command", "id": "q", "target": "tv", "command": map[string]any{
 		"action": "setQueue", "queue": songs, "index": 1, "positionMs": 0, "play": true,
 		"repeat": "one", "shuffle": true, "order": []int{1, 0},
 	}})
+
 	if got := tv.obey(""); got.Action != ActSetQueue || got.Repeat != RepeatOne || got.Shuffle == nil || !*got.Shuffle ||
 		!slices.Equal(got.Order, []int{1, 0}) {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	pc.expect("result")
 
 	pc.send(map[string]any{"type": "command", "id": "j", "target": "tv", "command": map[string]any{"action": "jump", "index": 2}})
+
 	if got := tv.obey(""); got.Action != ActJump || got.Index == nil || *got.Index != 2 {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	pc.expect("result")
 
 	pc.send(map[string]any{"type": "command", "id": "c2", "target": "tv", "command": map[string]any{"action": "next"}})
 	tv.obey("no such track")
+
 	if r := pc.expect("result"); r.OK || r.Error != "no such track" {
 		t.Fatalf("result %+v", r)
 	}
@@ -441,10 +517,12 @@ func TestCommands(t *testing.T) {
 		{"speaker", map[string]any{"action": "removeFromQueue", "index": 1}, "unsupported"},
 	} {
 		pc.send(map[string]any{"type": "command", "id": "x", "target": c.target, "command": c.command})
+
 		if r := pc.expect("result"); r.OK || r.Error != c.want {
 			t.Errorf("%s %v: got %+v, want %s", c.target, c.command, r, c.want)
 		}
 	}
+
 drain:
 	for {
 		select {
@@ -464,6 +542,7 @@ func TestTransfer(t *testing.T) {
 	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
 	phone.report(map[string]any{
 		"status": "playing", "positionMs": 30000, "index": 1, "queue": songs,
 		"repeat": "all", "shuffle": true, "order": []int{1, 0},
@@ -472,26 +551,32 @@ func TestTransfer(t *testing.T) {
 	c.advance(200 * time.Millisecond)
 
 	pc.send(map[string]any{"type": "transfer", "id": "t1", "from": "phone", "to": "tv"})
+
 	got := tv.obey("")
 	if got.Action != ActSetQueue || *got.Index != 1 || *got.PositionMs != 30200 || !*got.Play {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	// In the modes it played in, shuffled in the same order.
 	if got.Repeat != RepeatAll || got.Shuffle == nil || !*got.Shuffle || !slices.Equal(got.Order, []int{1, 0}) {
 		t.Fatalf("the TV got the modes %q, %v, %v", got.Repeat, got.Shuffle, got.Order)
 	}
+
 	if got.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" || got.Queue[1].ID != "7N42dgm5tFLK9N8MT7fHC7" {
 		t.Fatalf("queue %+v", got.Queue)
 	}
+
 	// The music has left the phone: it stops, rather than stay paused with a queue no one plays.
 	if stopped := phone.obey(""); stopped.Action != ActStop {
 		t.Fatalf("the phone got %+v", stopped)
 	}
+
 	if r := pc.expect("result"); r.Re != "t1" || !r.OK {
 		t.Fatalf("result %+v", r)
 	}
 
 	pc.send(map[string]any{"type": "transfer", "id": "t2", "from": "pc", "to": "tv"})
+
 	if r := pc.expect("result"); r.Error != "nothingToTransfer" {
 		t.Fatalf("result %+v", r)
 	}
@@ -504,21 +589,26 @@ func TestAddToQueue(t *testing.T) {
 
 	// The tracks reach the player in its own API, with the place they go.
 	phone.send(map[string]any{"type": "command", "id": "a1", "target": "tv", "command": map[string]any{"action": "addToQueue", "queue": songs, "next": false}})
+
 	got := tv.obey("")
 	if got.Action != ActAddToQueue || got.Next == nil || *got.Next || got.Index != nil || got.Play != nil {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	if len(got.Queue) != 2 || got.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" || got.Queue[1].ID != "7N42dgm5tFLK9N8MT7fHC7" {
 		t.Fatalf("queue %+v", got.Queue)
 	}
+
 	if r := phone.expect("result"); r.Re != "a1" || !r.OK {
 		t.Fatalf("result %+v", r)
 	}
 
 	phone.send(map[string]any{"type": "command", "id": "a2", "target": "tv", "command": map[string]any{"action": "addToQueue", "queue": songs[:1], "next": true}})
+
 	if got := tv.obey(""); got.Next == nil || !*got.Next || len(got.Queue) != 1 {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	phone.expect("result")
 }
 
@@ -529,23 +619,28 @@ func TestMoveAndRemoveInQueue(t *testing.T) {
 
 	// The places reach the player as they were sent, and nothing else.
 	phone.send(map[string]any{"type": "command", "id": "m1", "target": "tv", "command": map[string]any{"action": "moveInQueue", "index": 2, "to": 0, "queue": songs, "next": true}})
+
 	got := tv.obey("")
 	if got.Action != ActMoveInQueue || got.Index == nil || *got.Index != 2 || got.To == nil || *got.To != 0 || got.Queue != nil || got.Next != nil {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	if r := phone.expect("result"); r.Re != "m1" || !r.OK {
 		t.Fatalf("result %+v", r)
 	}
 
 	phone.send(map[string]any{"type": "command", "id": "m2", "target": "tv", "command": map[string]any{"action": "removeFromQueue", "index": 1, "to": 3}})
+
 	if got := tv.obey(""); got.Action != ActRemoveFromQueue || got.Index == nil || *got.Index != 1 || got.To != nil {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	phone.expect("result")
 
 	// The player's own error reaches the controller as it is.
 	phone.send(map[string]any{"type": "command", "id": "m3", "target": "tv", "command": map[string]any{"action": "removeFromQueue", "index": 0}})
 	tv.obey("current track")
+
 	if r := phone.expect("result"); r.OK || r.Error != "current track" {
 		t.Fatalf("result %+v", r)
 	}
@@ -555,13 +650,16 @@ func TestTransferLeavesThePausedSourceIdleToo(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	phone.report(map[string]any{"status": "paused", "positionMs": 5000, "queue": songs})
 	tv.expect("state")
 	phone.send(map[string]any{"type": "transfer", "id": "t", "from": "phone", "to": "tv", "play": true})
 	tv.obey("")
+
 	if stopped := phone.obey(""); stopped.Action != ActStop {
 		t.Fatalf("the phone got %+v", stopped)
 	}
+
 	phone.expect("result")
 }
 
@@ -570,9 +668,11 @@ func TestADeviceWithoutStopIsPausedInstead(t *testing.T) {
 	old := []Action{ActPlay, ActPause, ActSetQueue}
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, old...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
 	tv.expect("state")
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+
 	if msg := phone.expect("command"); msg.Command.Action != ActPause {
 		t.Fatalf("one device at a time: the phone got %+v", msg.Command)
 	}
@@ -582,15 +682,18 @@ func TestContinueHereFromAnOfflineDevice(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	phone.report(map[string]any{"status": "paused", "positionMs": 5000, "queue": songs[:1]})
 	tv.expect("state")
 	_ = phone.ws.Close()
 	tv.expectDevice("phone", func(d Device) bool { return !d.Online && d.State != nil && d.State.PositionMs == 5000 })
 
 	tv.send(map[string]any{"type": "transfer", "id": "t", "from": "phone", "to": "tv", "play": false})
+
 	if got := tv.obey(""); *got.PositionMs != 5000 || *got.Play || got.Queue[0].ID != songs[0]["id"] {
 		t.Fatalf("the TV got %+v", got)
 	}
+
 	if r := tv.expect("result"); !r.OK {
 		t.Fatalf("result %+v", r)
 	}
@@ -600,17 +703,22 @@ func TestReconnectReplacesTheOldConnection(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
 	old, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+
 	pc.expectDevice("phone", func(d Device) bool { return d.Online })
+
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+
 	if code := old.expectClose(); code != CloseReplaced {
 		t.Fatalf("old connection closed with %d", code)
 	}
 
 	pc.send(map[string]any{"type": "command", "id": "c", "target": "phone", "command": map[string]any{"action": "play"}})
 	phone.obey("")
+
 	if r := pc.expect("result"); !r.OK {
 		t.Fatalf("result %+v", r)
 	}
+
 	// The old connection's close must not have marked the device offline.
 quiet:
 	for {
@@ -631,16 +739,20 @@ func TestCommandTimeoutAndDisconnect(t *testing.T) {
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
 
 	pc.send(map[string]any{"type": "command", "id": "late", "target": "stuck", "command": map[string]any{"action": "play"}})
+
 	late := stuck.expect("command")
+
 	if r := pc.expect("result"); r.Error != "timeout" {
 		t.Fatalf("result %+v", r)
 	}
+
 	stuck.send(map[string]any{"type": "result", "re": late.ID, "ok": true}) // ignored
 
 	// A player that goes away fails its pending commands at once, without waiting for the timeout.
 	pc.send(map[string]any{"type": "command", "id": "gone", "target": "stuck", "command": map[string]any{"action": "play"}})
 	stuck.expect("command")
 	_ = stuck.ws.Close()
+
 	if r := pc.expect("result"); r.Error != "offline" {
 		t.Fatalf("result %+v", r)
 	}
@@ -658,6 +770,7 @@ func TestSweepForgetsOldOfflineDevices(t *testing.T) {
 	h.Sweep()
 	c.advance(2 * time.Minute)
 	h.Sweep()
+
 	if msg := pc.expect("gone"); msg.DeviceID != "phone" {
 		t.Fatalf("got %+v", msg)
 	}
@@ -665,15 +778,21 @@ func TestSweepForgetsOldOfflineDevices(t *testing.T) {
 
 func TestInfoEndpoint(t *testing.T) {
 	h := New(Options{Authenticate: byUsername})
+
 	for _, path := range []string{"/v1/info", "/connect/v1/info"} {
 		w := httptest.NewRecorder()
+
 		h.Handler(map[string]any{"server": "navidrome", "protocol": "ignored"}).ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+
 		if w.Code != 200 || w.Body.String() != `{"protocol":"segue","server":"navidrome","versions":[1]}` {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body)
 		}
 	}
+
 	w := httptest.NewRecorder()
+
 	h.Handler(nil).ServeHTTP(w, httptest.NewRequest("GET", "/connectx/v1/info", nil))
+
 	if w.Code != 404 {
 		t.Errorf("/connectx/v1/info: %d", w.Code)
 	}
@@ -690,6 +809,7 @@ func TestInfoThatIsntJSON(t *testing.T) {
 
 func TestRoutes(t *testing.T) {
 	h := New(Options{Authenticate: byUsername})
+
 	for _, tc := range []struct {
 		method, path string
 		code         int
@@ -704,7 +824,9 @@ func TestRoutes(t *testing.T) {
 		{"GET", "/", 404, ""},
 	} {
 		w := httptest.NewRecorder()
+
 		h.Handler(nil).ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+
 		if w.Code != tc.code || w.Header().Get("Allow") != tc.allow {
 			t.Errorf("%s %s: %d, Allow %q", tc.method, tc.path, w.Code, w.Header().Get("Allow"))
 		}
@@ -712,6 +834,7 @@ func TestRoutes(t *testing.T) {
 
 	// The WebSocket under /connect/, where it sits on the media server's origin.
 	url, _ := startHub(t, Options{})
+
 	join(t, strings.Replace(url, "/v1/ws", "/connect/v1/ws", 1), as("alice"), info("tv", Subsonic, player))
 }
 
@@ -721,11 +844,14 @@ func TestLastPlayback(t *testing.T) {
 	url, h := startHub(t, Options{Now: c.Now, StatePath: path})
 	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	stateFrom := func(d *testDevice, id string) {
 		t.Helper()
+
 		for d.expect("state").DeviceID != id {
 		}
 	}
+
 	phone.report(map[string]any{"status": "playing", "positionMs": 30000, "index": 1, "queue": songs})
 	stateFrom(tv, "phone")
 
@@ -733,7 +859,9 @@ func TestLastPlayback(t *testing.T) {
 	// opens empty doesn't wipe it.
 	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs[:1]})
 	stateFrom(phone, "tv")
+
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, player, everything...))
+
 	pc.report(map[string]any{"status": "stopped", "positionMs": 0, "queue": []any{}})
 	stateFrom(tv, "pc")
 
@@ -748,17 +876,21 @@ func TestLastPlayback(t *testing.T) {
 	if last == nil || last.DeviceID != "" || last.DeviceName != "phone" {
 		t.Fatalf("last playback %+v", last)
 	}
+
 	if last.State.Status != Paused || last.State.PositionMs != 40000 || *last.State.Index != 1 {
 		t.Fatalf("state %+v", last.State.PlayerState)
 	}
+
 	if last.State.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" {
 		t.Fatalf("queue not in the Subsonic ids: %+v", last.State.Queue)
 	}
 
 	// It survives a restart, and reaches each device in its own API.
 	h.Close()
+
 	url2, _ := startHub(t, Options{StatePath: path})
 	_, welcome = join(t, url2, as("Alice"), info("laptop", Jellyfin, controller))
+
 	if last := welcome.LastPlayback; last == nil || last.State.PositionMs != 40000 || last.State.Queue[0].ID != songs[0]["id"] {
 		t.Fatalf("after a restart: %+v", last)
 	}
@@ -769,6 +901,7 @@ func TestOfflineDeviceStopsPlaying(t *testing.T) {
 	url, _ := startHub(t, Options{Now: c.Now})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	phone.report(map[string]any{"status": "playing", "positionMs": 30000, "queue": songs})
 	tv.expect("state")
 
@@ -787,15 +920,19 @@ func TestLastPlaybackMovesOnlyByPlaying(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	lastOn := func() string {
 		t.Helper()
 		time.Sleep(50 * time.Millisecond) // the report before reaches the hub
+
 		_, welcome := join(t, url, as("alice"), info("pc", Subsonic, controller))
 		if welcome.LastPlayback == nil {
 			return ""
 		}
+
 		return welcome.LastPlayback.DeviceID
 	}
+
 	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
 	tv.expect("state")
 
@@ -805,15 +942,20 @@ func TestLastPlaybackMovesOnlyByPlaying(t *testing.T) {
 	_ = phone.ws.Close()
 	tv.expectDevice("phone", func(d Device) bool { return !d.Online })
 	tv.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
+
 	if got := lastOn(); got != "" {
 		t.Fatalf("last playback on %q after the TV loaded it", got)
 	}
+
 	phone, _ = join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	phone.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
+
 	if got := lastOn(); got != "" {
 		t.Fatalf("last playback on %q after the phone came back", got)
 	}
+
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+
 	if got := lastOn(); got != "tv" {
 		t.Fatalf("last playback on %q after the TV played", got)
 	}
@@ -822,10 +964,13 @@ func TestLastPlaybackMovesOnlyByPlaying(t *testing.T) {
 func TestLastPlaybackStaysWithAPausedDeviceThatIsOn(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
 	tv.report(map[string]any{"status": "paused", "positionMs": 5000})
 	time.Sleep(50 * time.Millisecond)
+
 	_, welcome := join(t, url, as("alice"), info("phone", Subsonic, controller))
+
 	if last := welcome.LastPlayback; last == nil || last.DeviceID != "tv" || last.State.PositionMs != 5000 {
 		t.Fatalf("last playback %+v", last)
 	}
@@ -835,12 +980,15 @@ func TestLastPlaybackHasNoHolderAfterARestart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "last.json")
 	url, h := startHub(t, Options{StatePath: path})
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
 	tv.report(map[string]any{"status": "paused", "positionMs": 5000})
 	time.Sleep(50 * time.Millisecond)
 	h.Close()
+
 	url2, _ := startHub(t, Options{StatePath: path})
 	_, welcome := join(t, url2, as("alice"), info("phone", Subsonic, controller))
+
 	if last := welcome.LastPlayback; last == nil || last.DeviceID != "" || last.DeviceName != "tv" || last.State.PositionMs != 5000 {
 		t.Fatalf("last playback after a restart %+v", last)
 	}
@@ -850,11 +998,14 @@ func TestLastPlaybackFollowsWhoPlays(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
 	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
 	tv.expect("state")
 	tv.report(map[string]any{"status": "playing", "positionMs": 5000, "queue": songs[1:]})
 	phone.expect("state")
+
 	_, welcome := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
 	if last := welcome.LastPlayback; last == nil || last.DeviceID != "tv" || len(last.State.Queue) != 1 {
 		t.Fatalf("last playback %+v", last)
 	}
@@ -865,14 +1016,19 @@ func TestStartingToPlayStopsTheOthers(t *testing.T) {
 	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
 	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
 	speaker, _ := join(t, url, as("alice"), info("speaker", Subsonic, player, everything...))
+
 	stateFrom := func(d *testDevice, id string) {
 		t.Helper()
+
 		for d.expect("state").DeviceID != id {
 		}
 	}
+
 	noCommand := func(d *testDevice) {
 		t.Helper()
+
 		deadline := time.After(200 * time.Millisecond)
+
 		for {
 			select {
 			case msg := <-d.msgs:
@@ -884,6 +1040,7 @@ func TestStartingToPlayStopsTheOthers(t *testing.T) {
 			}
 		}
 	}
+
 	// One at a time: from two connections, the reports could reach the TV in either order.
 	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
 	stateFrom(tv, "phone")
@@ -892,10 +1049,12 @@ func TestStartingToPlayStopsTheOthers(t *testing.T) {
 
 	// The TV starts playing: the phone, which plays, stops; the paused speaker is left alone.
 	tv.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs})
+
 	msg := phone.expect("command")
 	if msg.Command.Action != ActStop || msg.From != "tv" {
 		t.Fatalf("the phone got %+v from %q", msg.Command, msg.From)
 	}
+
 	phone.send(map[string]any{"type": "result", "re": msg.ID, "ok": true})
 	noCommand(speaker)
 

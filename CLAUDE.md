@@ -22,6 +22,7 @@ A TypeScript reference client used to live in `client/`; `git checkout c22dc7b -
 
 ```sh
 cd hub
+go vet ./... && gofmt -l .                   # gofmt lists the files it would change
 go test -race ./...
 go test -race -run TestTransfer ./...        # one test
 go build -o segue-hub ./cmd/segue-hub
@@ -31,6 +32,7 @@ SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
 Without Go installed, the same through Docker (from `hub/`):
 
 ```sh
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/src -w /src -e HOME=/tmp golang:1.27 sh -c 'go vet ./... && gofmt -l .'
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/src -w /src -e HOME=/tmp golang:1.27 go test -race ./...
 docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/src -w /src -e HOME=/tmp -e CGO_ENABLED=0 golang:1.27 go build -o segue-hub ./cmd/segue-hub
 ```
@@ -82,11 +84,49 @@ The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binar
 ## Conventions
 
 - Code, comments, `README.md` and `SPEC.md` are in English. Error codes from the hub (the `code`
-  constants in `protocol.go`) reach users through the app, which turns them into Portuguese
-  messages (`describeError` in segue-app's `lib/ui/errors.dart`), so a new one needs an entry there.
+  constants in `protocol.go`) reach users through the app, which turns them into messages in their
+  language (`describeError` in segue-app's `lib/ui/widgets/errors.dart`, from its ARB files), so a
+  new one needs an entry there.
 - Commit messages are in Portuguese: a short title (prefixed `Hub:` for hub-only changes) and a
   body explaining the behaviour and why.
 - `README.md` has "Next steps". Update it when a feature lands.
+- The hub follows the app's code conventions (segue-app's `CLAUDE.md`), in their Go form below.
+- Go layout is `gofmt`'s, except for blank lines, which it keeps but never adds, so these are by
+  hand. A statement with braces (`if`, `for`, `switch`, `select`, a bare block, a local function or
+  struct type over several lines) has a blank line before and after it, separating it from the
+  statements around it, but not at the start or end of its block. The `return` that ends a
+  function (a method, a closure) has one above it too, where other statements come before it. A
+  run of `:=` declarations is a group of its own, and so is a run of `var` declarations: a blank
+  line separates either from the other and from a statement that calls something (a function, a
+  method, a `defer` or a `go`: `h.mu.Lock()`, `go s.run()`), before or after it. A comment above a
+  statement or a group belongs to it, so the blank line goes above the comment. Two Go idioms stay
+  right under the statement that assigned what they use: the `if` that checks it
+  (`res, err := client.Do(req)` then `if err != nil {`; `var urlErr *url.Error` then
+  `if errors.As(err, &urlErr) {`) and the `defer` that releases it (`defer ping.Stop()`).
+- A local variable is declared where it is first needed, below the `return`s (or `continue`s,
+  `break`s, `panic`s) that leave without it, so that leaving there computes nothing it won't use.
+  It stays above them where the order matters: what has to be read under `h.mu`, before the lock
+  is released (`from := e.info.ID` in `onTransfer`), work kept out of the lock (`parseState` in
+  `onState`), a value kept before the code between changes it, or one whose computing has to
+  happen either way. A statement declaring several values at once (`report, ok := ...`) stays
+  whole.
+- Go design follows Effective Go (https://go.dev/doc/effective_go) and the Go Code Review Comments
+  (https://go.dev/wiki/CodeReviewComments). `gofmt` and `go vet` check what they can; the rest is by
+  hand: terms used consistently, a doc comment on every exported name that starts with it,
+  initialisms in one case (`ID`, `API`, `URL`), no `Get` prefix, short names for short scopes
+  (`e`, `p`, `err`) and fuller ones for wider, errors that start in lower case, end without a
+  period and say where they come from (`hub:`, the endpoint).
+- A comment says what the code can't: why it is so, what it works around, what a number means.
+  One that only says again what the code says goes. Where every member of a list of fields or of a
+  const block has its doc, the obvious one stays, rather than leave a gap, and so does an exported
+  name's doc comment, which Effective Go asks of every one.
+- What fails, with the hub going on without it, says so in the log: through the hub's
+  `*slog.Logger` (`Options.Logger`), as
+  `q.log.Warn("can't report to the media server", "device", p.Device, "err", err)`, never
+  `fmt.Print` or the `log` package, which miss the logger the program gave the hub. What can't
+  fail, or fails with its connection already gone, is dropped with `_` (`_ = ws.Close()`).
+- No name ends in `_`, and none hides a package or a function that the code around it calls: when
+  the obvious one is taken (`url`, `jellyfinBase`), pick a fuller one (`hubURL`, `jellyfinBaseURL`).
 - Docs, comments and tests stay generic: no names from a particular setup (machine or device names,
   hostnames, server paths, the tooling of the server it is developed on). Use names like `laptop`,
   `phone`, `tv` and `music.example`.

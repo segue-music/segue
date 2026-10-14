@@ -133,6 +133,7 @@ func (a Auth) clean() (Auth, bool) {
 	case SchemeJellyfin:
 		return Auth{Scheme: a.Scheme, Token: a.Token}, a.Token != ""
 	}
+
 	return Auth{}, false
 }
 
@@ -158,22 +159,29 @@ func (d *DeviceInfo) clean() bool {
 	if d.ID == "" || d.Name == "" || d.Client == "" || (d.API != Subsonic && d.API != Jellyfin) {
 		return false
 	}
+
 	roles := []Role{}
+
 	for _, r := range d.Roles {
 		if r != RolePlayer && r != RoleController {
 			return false
 		}
+
 		if !slices.Contains(roles, r) {
 			roles = append(roles, r)
 		}
 	}
+
 	capabilities := []Action{}
+
 	for _, a := range d.Capabilities {
 		if knownActions[a] && !slices.Contains(capabilities, a) {
 			capabilities = append(capabilities, a)
 		}
 	}
+
 	d.Roles, d.Capabilities = roles, capabilities
+
 	return true
 }
 
@@ -208,18 +216,23 @@ type PlayerState struct {
 
 func (s *PlayerState) merge(report PlayerState) {
 	s.Status, s.PositionMs = report.Status, report.PositionMs
+
 	if report.Queue != nil {
 		s.Queue, s.Order = report.Queue, report.Order
 	}
+
 	if report.Index != nil {
 		s.Index = report.Index
 	}
+
 	if report.Volume != nil {
 		s.Volume = report.Volume
 	}
+
 	if report.Repeat != "" {
 		s.Repeat = report.Repeat
 	}
+
 	if report.Shuffle != nil {
 		s.Shuffle = report.Shuffle
 	}
@@ -236,6 +249,7 @@ func (s *StampedState) pause(now int64) {
 	if s.Status != Playing {
 		return
 	}
+
 	s.PositionMs = s.positionAt(now)
 	s.Status, s.At = Paused, now
 }
@@ -245,22 +259,28 @@ func (s *StampedState) positionAt(now int64) int64 {
 	if s.Status != Playing {
 		return s.PositionMs
 	}
+
 	position := s.PositionMs + max(0, now-s.At)
+
 	if item, ok := s.current(); ok && item.DurationMs > 0 {
 		position = min(position, item.DurationMs)
 	}
+
 	return position
 }
 
 // current is the queue's item at index, if there is one.
 func (s *PlayerState) current() (QueueItem, bool) {
 	index := 0
+
 	if s.Index != nil {
 		index = *s.Index
 	}
+
 	if index < len(s.Queue) {
 		return s.Queue[index], true
 	}
+
 	return QueueItem{}, false
 }
 
@@ -313,15 +333,18 @@ func parseState(raw json.RawMessage) (PlayerState, bool) {
 		PlayerState
 		PositionMs *int64 `json:"positionMs"` // a pointer, to tell a missing position from 0
 	}
+
 	if json.Unmarshal(raw, &s) != nil || s.PositionMs == nil || *s.PositionMs < 0 {
 		return PlayerState{}, false
 	}
+
 	state := s.PlayerState
 	state.PositionMs = *s.PositionMs
 	ok := (state.Status == Playing || state.Status == Paused || state.Status == Stopped) &&
 		validQueue(state.Queue) && (state.Index == nil || *state.Index >= 0) &&
 		(state.Volume == nil || (*state.Volume >= 0 && *state.Volume <= 100)) &&
 		(state.Repeat == "" || state.Repeat.valid()) && validOrder(state.Order, state.Queue)
+
 	return state, ok
 }
 
@@ -331,6 +354,7 @@ func parseCommand(raw json.RawMessage) (Command, bool) {
 	if json.Unmarshal(raw, &c) != nil {
 		return Command{}, false
 	}
+
 	switch c.Action {
 	case ActPlay, ActPause, ActToggle, ActStop, ActNext, ActPrevious:
 		return Command{Action: c.Action}, true
@@ -362,6 +386,7 @@ func parseCommand(raw json.RawMessage) (Command, bool) {
 	case ActRemoveFromQueue:
 		return Command{Action: c.Action, Index: c.Index}, c.Index != nil && *c.Index >= 0
 	}
+
 	return Command{}, false
 }
 
@@ -370,16 +395,21 @@ func validOrder(order []int, queue []QueueItem) bool {
 	if order == nil {
 		return true
 	}
+
 	if queue == nil || len(order) != len(queue) {
 		return false
 	}
+
 	seen := make([]bool, len(order))
+
 	for _, place := range order {
 		if place < 0 || place >= len(order) || seen[place] {
 			return false
 		}
+
 		seen[place] = true
 	}
+
 	return true
 }
 
@@ -389,6 +419,7 @@ func validQueue(queue []QueueItem) bool {
 			return false
 		}
 	}
+
 	return true
 }
 

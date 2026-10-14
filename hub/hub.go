@@ -90,28 +90,35 @@ func New(opts Options) *Hub {
 	if opts.Authenticate == nil {
 		panic("hub: Options.Authenticate is required")
 	}
+
 	if opts.Translate == nil {
 		opts.Translate = NoTranslation
 	}
+
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
+
 	opts.HelloTimeout = cmp.Or(opts.HelloTimeout, 10*time.Second)
 	opts.CommandTimeout = cmp.Or(opts.CommandTimeout, 10*time.Second)
 	opts.OfflineTTL = cmp.Or(opts.OfflineTTL, 24*time.Hour)
 	log := cmp.Or(opts.Logger, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	h := &Hub{opts: opts, log: log, users: map[string]map[string]*entry{}, pending: map[string]*pending{}}
 	h.last = map[string]*lastPlayback{}
+
 	if opts.StatePath != "" {
 		h.store, h.last = openStore(opts.StatePath, log)
+
 		// No device is connected yet, so none holds a last playback (SPEC.md, section 7).
 		for _, last := range h.last {
 			last.DeviceID = ""
 		}
 	}
+
 	if opts.Report != nil {
 		h.reports = startReports(opts.Report, log)
 		ticker, done := time.NewTicker(reportAgainAfter/4), make(chan struct{})
+
 		go func() {
 			for {
 				select {
@@ -127,6 +134,7 @@ func New(opts Options) *Hub {
 			close(done)
 		})
 	}
+
 	return h
 }
 
@@ -153,17 +161,22 @@ func (h *Hub) Open(conn Conn) *Session {
 // check of the hello's credentials with the media server.
 func (s *Session) Message(ctx context.Context, raw []byte) {
 	var msg incoming
+
 	err := json.Unmarshal(raw, &msg)
+
 	if !s.greeted {
 		s.greeted = true
 		s.helloTimer.Stop()
+
 		if err != nil {
 			s.conn.Close(CloseBadHello, "malformed hello")
 			return
 		}
+
 		s.entry = s.hub.hello(ctx, s.conn, msg)
 		return
 	}
+
 	switch {
 	case s.entry == nil: // the hello failed and the connection is closing
 	case err != nil:
@@ -177,6 +190,7 @@ func (s *Session) Message(ctx context.Context, raw []byte) {
 // connection of it took over.
 func (s *Session) Closed() {
 	s.helloTimer.Stop()
+
 	if s.entry != nil {
 		s.hub.disconnect(s.entry, s.conn)
 	}
@@ -186,15 +200,19 @@ func (s *Session) Closed() {
 func (h *Hub) Sweep() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	cutoff := h.opts.Now().Add(-h.opts.OfflineTTL)
+
 	for user, devices := range h.users {
 		for id, e := range devices {
 			if e.conn != nil || !e.lastSeen.Before(cutoff) {
 				continue
 			}
+
 			delete(devices, id)
 			h.broadcast(e, func(*entry) any { return goneMsg{Type: "gone", DeviceID: id} })
 		}
+
 		if len(devices) == 0 {
 			delete(h.users, user)
 		}
@@ -206,18 +224,21 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 		conn.Close(CloseBadHello, fmt.Sprintf("expected a hello for protocol %d", ProtocolVersion))
 		return nil
 	}
+
 	auth, authOK := msg.Auth.clean()
 	info := msg.Device
 	if !authOK || !info.clean() {
 		conn.Close(CloseBadHello, "malformed hello")
 		return nil
 	}
+
 	user, ok, err := h.opts.Authenticate(ctx, auth)
 	if err != nil {
 		h.log.Warn("media server unreachable", "err", err)
 		conn.Close(CloseUnavailable, "media server unreachable")
 		return nil
 	}
+
 	if !ok || user == "" {
 		h.log.Info("credentials rejected", "device", info.Name, "client", info.Client)
 		conn.Close(CloseUnauthorized, "credentials rejected by the media server")
@@ -226,58 +247,73 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	devices := h.devicesOf(user)
 	e := devices[info.ID]
+
 	var replaced Conn
+
 	if e == nil {
 		e = &entry{user: strings.ToLower(user)}
 		devices[info.ID] = e
 	} else {
 		replaced = e.conn
 	}
+
 	e.info, e.auth, e.conn, e.lastSeen = info, auth, conn, h.opts.Now()
+
 	if replaced != nil {
 		h.failPending(e, codeOffline)
 		replaced.Close(CloseReplaced, "the device connected again")
 	}
 
 	others := []Device{}
+
 	for _, other := range devices {
 		if other != e {
 			others = append(others, h.view(other, info.API))
 		}
 	}
+
 	slices.SortFunc(others, func(a, b Device) int { return strings.Compare(a.ID, b.ID) })
+
 	welcome := welcomeMsg{
 		Type: "welcome", Protocol: ProtocolVersion, User: user,
 		ServerTime: h.opts.Now().UnixMilli(), Devices: others,
 	}
+
 	if last := h.last[e.user]; last != nil {
 		welcome.LastPlayback = &lastPlaybackMsg{
 			DeviceID: last.DeviceID, DeviceName: last.DeviceName,
 			State: h.translateState(last.State, last.API, info.API),
 		}
 	}
+
 	conn.Send(welcome)
 	h.announce(e)
 	h.log.Info("device connected", "user", user, "device", info.Name, "client", info.Client)
+
 	return e
 }
 
 func (h *Hub) disconnect(e *entry, conn Conn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	if e.conn != conn {
 		return // a newer connection of the same device took over
 	}
+
 	now := h.opts.Now()
 	e.conn, e.lastSeen = nil, now
 	h.failPending(e, codeOffline)
+
 	if e.state != nil {
 		// Offline, it doesn't play (SPEC.md, section 3). Left playing, it would come back announced
 		// as playing, before its first report, and the other apps would follow it.
 		e.state.pause(now.UnixMilli())
 	}
+
 	h.releaseLastPlayback(e)
 	h.notePlayback(e)
 	e.auth = Auth{}
@@ -287,11 +323,15 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 
 func (h *Hub) dispatch(e *entry, conn Conn, msg incoming) {
 	h.mu.Lock()
+
 	current := e.conn == conn
+
 	h.mu.Unlock()
+
 	if !current {
 		return // late message on a connection that was replaced
 	}
+
 	switch msg.Type {
 	case "state":
 		h.onState(e, conn, msg)
@@ -307,9 +347,12 @@ func (h *Hub) dispatch(e *entry, conn Conn, msg incoming) {
 }
 
 func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
+	// Parsed before taking the lock, which a long queue would hold up for every user.
 	report, ok := parseState(msg.State)
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	switch {
 	case !e.info.isPlayer():
 		conn.Send(errorMsg{Type: "error", Error: codeNotPlayer})
@@ -318,20 +361,27 @@ func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
 		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 		return
 	}
+
 	now := h.opts.Now()
+
 	if e.state == nil {
 		e.state = &StampedState{}
 	}
+
 	started := report.Status == Playing && e.state.Status != Playing
+
 	e.state.merge(report)
 	e.state.At, e.lastSeen = now.UnixMilli(), now
 	h.noteLastPlayback(e)
 	h.notePlayback(e)
+
 	if started {
 		h.stopOthers(e)
 	}
+
 	// Recipients merge the report into what they have, so relay only what the player sent.
 	relayed := StampedState{PlayerState: report, At: now.UnixMilli()}
+
 	h.broadcast(e, func(to *entry) any {
 		return stateMsg{Type: "state", DeviceID: e.info.ID, State: h.translateState(relayed, e.info.API, to.info.API)}
 	})
@@ -345,6 +395,7 @@ func (h *Hub) stopOthers(e *entry) {
 		if other == e || other.conn == nil || other.state == nil || other.state.Status != Playing {
 			continue
 		}
+
 		if command, ok := leave(other); ok {
 			h.log.Info("one device at a time: stopping", "user", e.user, "device", other.info.Name, "for", e.info.Name)
 			go h.request(other, command, other.info.API, e.info.ID)
@@ -362,6 +413,7 @@ func leave(e *entry) (command Command, ok bool) {
 	case e.state != nil && e.state.Status == Playing && e.info.obeys(ActPause):
 		return Command{Action: ActPause}, true
 	}
+
 	return Command{}, false
 }
 
@@ -370,12 +422,18 @@ func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 		return
 	}
+
 	command, ok := parseCommand(msg.Command)
+
 	h.mu.Lock()
+
 	target := h.users[e.user][msg.Target]
 	fromAPI, from := e.info.API, e.info.ID
+
 	h.mu.Unlock()
+
 	var o outcome
+
 	switch {
 	case !ok:
 		o.err = codeBadMessage
@@ -384,6 +442,7 @@ func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 	default:
 		o = h.request(target, command, fromAPI, from)
 	}
+
 	conn.Send(resultMsg{Type: "result", Re: msg.ID, OK: o.ok, Error: o.err})
 }
 
@@ -394,15 +453,19 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 		return
 	}
+
 	reply := func(o outcome) { conn.Send(resultMsg{Type: "result", Re: msg.ID, OK: o.ok, Error: o.err}) }
 
 	h.mu.Lock()
+
 	devices := h.users[e.user]
 	source, destination := devices[msg.From], devices[msg.To]
 	from := e.info.ID
+
 	var handoff Command
 	var sourceAPI API
-	problem := ""
+	var problem string
+
 	switch {
 	case source == nil || destination == nil:
 		problem = codeUnknownDevice
@@ -414,9 +477,11 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	default:
 		state := source.state
 		index := 0
+
 		if state.Index != nil {
 			index = *state.Index
 		}
+
 		position := state.positionAt(h.opts.Now().UnixMilli())
 		play := msg.Play == nil || *msg.Play
 		// With the modes it played in, shuffled in the same order, which shuffle going off takes back.
@@ -426,7 +491,9 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 		}
 		sourceAPI = source.info.API
 	}
+
 	h.mu.Unlock()
+
 	if problem != "" {
 		reply(outcome{err: problem})
 		return
@@ -435,31 +502,40 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	o := h.request(destination, handoff, sourceAPI, from)
 	if o.ok && source != destination {
 		h.mu.Lock()
+
 		var command Command
-		ok := false
+		var ok bool
+
 		if source.conn != nil && source.state != nil && len(source.state.Queue) > 0 {
 			command, ok = leave(source)
 		}
+
 		h.mu.Unlock()
+
 		if ok {
 			// Best effort: the music has already moved, so a source that won't stop doesn't undo it.
 			h.request(source, command, sourceAPI, from)
 		}
 	}
+
 	reply(o)
 }
 
 func (h *Hub) onResult(e *entry, msg incoming) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
 	p := h.pending[msg.Re]
 	if p == nil || p.target != e {
 		return // late, or not this device's to answer
 	}
+
 	o := outcome{ok: msg.OK}
+
 	if !msg.OK {
 		o.err = cmp.Or(msg.Error, codeFailed)
 	}
+
 	h.finish(msg.Re, o)
 }
 
@@ -467,6 +543,7 @@ func (h *Hub) onResult(e *entry, msg incoming) {
 // command's queue, if any.
 func (h *Hub) request(target *entry, command Command, fromAPI API, from string) outcome {
 	h.mu.Lock()
+
 	switch {
 	case target.conn == nil:
 		h.mu.Unlock()
@@ -478,9 +555,11 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 		h.mu.Unlock()
 		return outcome{err: codeUnsupported}
 	}
+
 	if command.Action == ActSetQueue || command.Action == ActAddToQueue {
 		command.Queue = h.translateQueue(command.Queue, fromAPI, target.info.API)
 	}
+
 	id := newID()
 	p := &pending{target: target, done: make(chan outcome, 1)}
 	h.pending[id] = p
@@ -489,17 +568,22 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 
 	timer := time.NewTimer(h.opts.CommandTimeout)
 	defer timer.Stop()
+
 	select {
 	case o := <-p.done:
 		return o
 	case <-timer.C:
 		h.mu.Lock()
+
 		_, waiting := h.pending[id]
+
 		delete(h.pending, id)
 		h.mu.Unlock()
+
 		if !waiting {
 			return <-p.done // the answer arrived just as time ran out
 		}
+
 		return outcome{err: codeTimeout}
 	}
 }
@@ -529,6 +613,7 @@ func (h *Hub) devicesOf(user string) map[string]*entry {
 		devices = map[string]*entry{}
 		h.users[key] = devices
 	}
+
 	return devices
 }
 
@@ -550,10 +635,12 @@ func (h *Hub) broadcast(source *entry, build func(to *entry) any) {
 // view is a device as seen by a device that speaks api. Call with h.mu held.
 func (h *Hub) view(e *entry, api API) Device {
 	d := Device{DeviceInfo: e.info, Online: e.conn != nil}
+
 	if e.state != nil {
 		state := h.translateState(*e.state, e.info.API, api)
 		d.State = &state
 	}
+
 	return d
 }
 
@@ -561,6 +648,7 @@ func (h *Hub) translateState(state StampedState, from, to API) StampedState {
 	if state.Queue != nil {
 		state.Queue = h.translateQueue(state.Queue, from, to)
 	}
+
 	return state
 }
 
@@ -568,18 +656,23 @@ func (h *Hub) translateQueue(queue []QueueItem, from, to API) []QueueItem {
 	if from == to {
 		return queue
 	}
+
 	out := make([]QueueItem, len(queue))
+
 	for i, item := range queue {
 		if item.ID != "" {
 			item.ID, _ = h.opts.Translate(item.ID, from, to) // "" when it can't: metadata only
 		}
+
 		out[i] = item
 	}
+
 	return out
 }
 
 func newID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
+
 	return hex.EncodeToString(b)
 }

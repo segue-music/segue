@@ -34,10 +34,12 @@ func base62ToGUID(id string) (string, bool) {
 	if len(id) != 22 || strings.IndexFunc(id, func(r rune) bool { return !isAlnum(r) }) >= 0 {
 		return "", false
 	}
+
 	value, ok := new(big.Int).SetString(id, 62) // Go's base-62 digits, as Navidrome uses
 	if !ok || value.BitLen() > 128 {
 		return "", false
 	}
+
 	return hex.EncodeToString(value.FillBytes(make([]byte, 16))), true
 }
 
@@ -46,10 +48,12 @@ func guidToBase62(guid string) (string, bool) {
 	if err != nil || len(b) != 16 {
 		return "", false
 	}
+
 	// Twelve zero bytes mark Navidrome's reserved GUIDs (libraries, playlist entries): not item ids.
 	if bytes.Equal(b[:12], make([]byte, 12)) {
 		return "", false
 	}
+
 	return fmt.Sprintf("%022s", new(big.Int).SetBytes(b).Text(62)), true
 }
 
