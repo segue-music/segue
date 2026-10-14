@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -783,16 +784,21 @@ func TestTransferWithoutASourceAfterARestart(t *testing.T) {
 
 	phone.report(map[string]any{"status": "playing", "positionMs": 30000, "index": 1, "queue": songs})
 	time.Sleep(50 * time.Millisecond) // the report reaches the hub
+	c.advance(10 * time.Second)
 	h.Close()
 
+	if code := phone.expectClose(); code != CloseGoingAway {
+		t.Fatalf("the phone got %d", code)
+	}
+
 	// The hub went down with the phone playing. Back an hour later, it has no device, and the last
-	// playback's clock stopped where the phone last reported.
+	// playback's clock stopped where the phone had got to as the hub went down.
 	c.advance(time.Hour)
 
 	url2, _ := startHub(t, Options{Now: c.Now, StatePath: path})
 	tv, welcome := join(t, url2, as("alice"), info("tv", Subsonic, player, everything...))
 
-	if last := welcome.LastPlayback; last == nil || last.State.Status != Paused || last.State.PositionMs != 30000 {
+	if last := welcome.LastPlayback; last == nil || last.State.Status != Paused || last.State.PositionMs != 40000 {
 		t.Fatalf("last playback after a restart %+v", last)
 	}
 
@@ -806,7 +812,7 @@ func TestTransferWithoutASourceAfterARestart(t *testing.T) {
 	tv.send(map[string]any{"type": "transfer", "id": "t2", "to": "tv"})
 
 	got := tv.obey("")
-	if got.Action != ActSetQueue || *got.Index != 1 || *got.PositionMs != 30000 || !*got.Play {
+	if got.Action != ActSetQueue || *got.Index != 1 || *got.PositionMs != 40000 || !*got.Play {
 		t.Fatalf("the TV got %+v", got)
 	}
 
@@ -816,6 +822,56 @@ func TestTransferWithoutASourceAfterARestart(t *testing.T) {
 
 	if r := tv.expect("result"); r.Re != "t2" || !r.OK {
 		t.Fatalf("result %+v", r)
+	}
+}
+
+func TestCloseTellsTheDevicesAndTurnsNewOnesAway(t *testing.T) {
+	url, h := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	pc, _ := join(t, url, as("bob"), info("pc", Subsonic, controller))
+
+	start := time.Now()
+
+	h.Close()
+
+	// The devices answered the close frames, so Close didn't wait them out.
+	if waited := time.Since(start); waited >= closeWait {
+		t.Fatalf("Close took %v", waited)
+	}
+
+	for _, d := range []*testDevice{phone, pc} {
+		if code := d.expectClose(); code != CloseGoingAway {
+			t.Fatalf("closed with %d", code)
+		}
+	}
+
+	if code := dial(t, url, as("alice"), info("tv", Subsonic, player, everything...)).expectClose(); code != CloseGoingAway {
+		t.Fatalf("a hello after Close: %d", code)
+	}
+}
+
+func TestLastPlaybackStopsWhereItWasAfterACrash(t *testing.T) {
+	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
+	path := filepath.Join(t.TempDir(), "last.json")
+	// What a hub that died with the TV playing left: no Close, so nobody let go of it.
+	last := map[string]any{"alice": map[string]any{
+		"deviceId": "tv", "deviceName": "tv", "api": "subsonic",
+		"state": map[string]any{"status": "playing", "positionMs": 30000, "at": c.Now().UnixMilli(), "queue": songs},
+	}}
+	data, _ := json.Marshal(last)
+
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	c.advance(time.Hour)
+
+	url, _ := startHub(t, Options{Now: c.Now, StatePath: path})
+	_, welcome := join(t, url, as("alice"), info("phone", Subsonic, controller))
+
+	// Where the last report put it: how long it played on, nobody can tell.
+	if got := welcome.LastPlayback; got == nil || got.DeviceID != "" || got.State.Status != Paused || got.State.PositionMs != 30000 {
+		t.Fatalf("last playback after a crash %+v", got)
 	}
 }
 

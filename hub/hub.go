@@ -60,7 +60,12 @@ type Hub struct {
 	reports *reportQueue                 // nil without Report
 	// stopReportingAgain stops the ticker that calls reportAgain; nil without Report.
 	stopReportingAgain func()
+	closing            bool          // Close has started: devices that say hello are turned away
+	drained            chan struct{} // closed once no device is online, while Close waits for that
 }
+
+// closeWait is how long Close waits for the devices to answer its close frames.
+const closeWait = 2 * time.Second
 
 type entry struct {
 	user     string
@@ -84,8 +89,9 @@ type pending struct {
 	done   chan outcome // buffered: finishing never blocks
 }
 
-// New returns a hub configured by opts, and panics if opts.Authenticate is nil. With a StatePath or
-// a Report, the hub has work of its own in the background: call Close at shutdown.
+// New returns a hub configured by opts, and panics if opts.Authenticate is nil. Call Close at
+// shutdown, which tells the devices, and finishes the work the hub does in the background with a
+// StatePath or a Report.
 func New(opts Options) *Hub {
 	if opts.Authenticate == nil {
 		panic("hub: Options.Authenticate is required")
@@ -138,6 +144,74 @@ func New(opts Options) *Hub {
 	}
 
 	return h
+}
+
+// Close closes every device's connection with CloseGoingAway, so that apps reconnect at once, to
+// the hub that comes back, rather than find out on their next message, and waits up to closeWait
+// for them to go offline. Then it writes what is still waiting to be written, and sends the reports
+// still waiting. The hub must not be used afterwards. Calling Close again does nothing.
+func (h *Hub) Close() {
+	h.disconnectAll()
+
+	if h.store != nil {
+		h.store.close()
+	}
+
+	if h.reports != nil {
+		h.stopReportingAgain()
+		h.reports.close()
+	}
+}
+
+// disconnectAll closes every device's connection and waits, up to closeWait, for them to end. A
+// device going offline lets go of the last playback, its clock stopping now, as any other would.
+func (h *Hub) disconnectAll() {
+	h.mu.Lock()
+
+	if h.closing {
+		h.mu.Unlock()
+		return
+	}
+
+	drained := make(chan struct{})
+	h.closing, h.drained = true, drained
+
+	for _, devices := range h.users {
+		for _, e := range devices {
+			if e.conn != nil {
+				e.conn.Close(CloseGoingAway, "the hub is shutting down")
+			}
+		}
+	}
+
+	h.noteDrained()
+	h.mu.Unlock()
+
+	timer := time.NewTimer(closeWait)
+	defer timer.Stop()
+
+	select {
+	case <-drained:
+	case <-timer.C:
+	}
+}
+
+// noteDrained lets Close go on once no device is online. Call with h.mu held.
+func (h *Hub) noteDrained() {
+	if h.drained == nil {
+		return
+	}
+
+	for _, devices := range h.users {
+		for _, e := range devices {
+			if e.conn != nil {
+				return
+			}
+		}
+	}
+
+	close(h.drained)
+	h.drained = nil
 }
 
 // Session is one connection's life in the hub. The transport calls Message for each text frame,
@@ -250,6 +324,11 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	if h.closing {
+		conn.Close(CloseGoingAway, "the hub is shutting down")
+		return nil
+	}
+
 	devices := h.devicesOf(user)
 	e := devices[info.ID]
 
@@ -317,9 +396,17 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 	}
 
 	h.releaseLastPlayback(e)
-	h.notePlayback(e)
+
+	// Not as the hub shuts down: the device comes back in a moment, to the hub that restarts, and a
+	// stop now would count a track twice where the media server counts it as it stops (Navidrome's
+	// Jellyfin API, past half of it), besides a blip in its now playing.
+	if !h.closing {
+		h.notePlayback(e)
+	}
+
 	e.auth = Auth{}
 	h.announce(e)
+	h.noteDrained()
 	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name)
 }
 

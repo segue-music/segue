@@ -68,19 +68,6 @@ func (h *Hub) saveLast() {
 	h.store.save(data)
 }
 
-// Close writes what is still waiting to be written, and sends the reports still waiting. The hub
-// must not be used afterwards. Calling Close again does nothing.
-func (h *Hub) Close() {
-	if h.store != nil {
-		h.store.close()
-	}
-
-	if h.reports != nil {
-		h.stopReportingAgain()
-		h.reports.close()
-	}
-}
-
 // store writes the last playbacks to a JSON file in the background, so the hub never waits on the
 // disk. Only the newest version waiting is written.
 type store struct {

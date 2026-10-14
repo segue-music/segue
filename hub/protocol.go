@@ -88,6 +88,7 @@ const (
 	CloseBadHello     = 4002 // no valid hello, or an unsupported protocol version
 	CloseReplaced     = 4003 // the same device connected again
 	CloseUnavailable  = 1011 // the media server didn't answer
+	CloseGoingAway    = 1001 // the hub is shutting down (a restart, say)
 )
 
 // Error codes the hub reports itself, in error and result messages (SPEC.md, section 5). Any other

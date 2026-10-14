@@ -161,7 +161,8 @@ the user can move between apps without surprises. This is what the reference app
   holds a paused queue.
 - **Keep the music when the controlled device goes away.** When the device the app controls goes
   offline, the app loads its queue here, paused where it got to, instead of losing it from the
-  screen.
+  screen. The same when it leaves the list without going offline first, as when the hub restarts
+  and that device doesn't come back: then from the last state the app saw of it.
 - **Show the last playback on opening.** On the first connection after the app opens, not on
   reconnections, if nothing plays anywhere and nothing is loaded here, it shows `lastPlayback`
   ([SPEC, section 7](SPEC.md#7-last-playback)). If another online device holds it, the app
@@ -198,6 +199,10 @@ for a track it hears of halfway, which shows it without counting.
   take turns kicking each other out.
 - Fail the requests still waiting for an answer when the connection closes.
 - The hub pings every 30 s. WebSocket libraries usually answer by themselves.
+- Ping the hub too. A hub that crashed, or a network that went away, leaves the connection open on
+  your side, through a reverse proxy especially, until you send something, and that first command
+  fails. The reference app pings every 15 s (`pingInterval` of dart:io's WebSocket), which notices
+  it within 30 s. A hub that shuts down normally closes with `1001`, and you reconnect at once.
 - Log the hub's `error` messages: each says that a message of yours had no effect, and why
   ([SPEC, section 2](SPEC.md#2-connection-and-authentication)).
 - Ignore message types, fields and capabilities you don't know, so that your app keeps working

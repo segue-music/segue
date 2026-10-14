@@ -179,6 +179,21 @@ func noReport(t *testing.T, reported chan Playback) {
 	}
 }
 
+func TestTheHubShuttingDownReportsNoStop(t *testing.T) {
+	report, reported := reportsTo()
+	hubURL, h := startHub(t, Options{Report: report})
+	tv, _ := join(t, hubURL, as("alice"), info("tv", Subsonic, player, everything...))
+
+	tv.report(map[string]any{"status": "playing", "positionMs": 1000, "index": 0, "queue": subsonicSongs})
+	nextReport(t, reported)
+	h.Close()
+
+	// The TV comes back to the hub that restarts, and plays on: a stop would count the track twice
+	// where the media server counts it as it stops.
+	tv.expectClose()
+	noReport(t, reported)
+}
+
 func TestClosingTwice(t *testing.T) {
 	report, _ := reportsTo()
 	h := New(Options{Authenticate: byUsername, Report: report, StatePath: filepath.Join(t.TempDir(), "last.json")})

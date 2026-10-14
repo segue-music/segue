@@ -147,6 +147,7 @@ If the hub closes the connection, the code tells why:
 | 4002 | No valid `hello` (or none within 10 s), or an unsupported `protocol` | Fix the client |
 | 4003 | The same device connected again elsewhere | Don't reconnect on its own |
 | 1011 | The media server didn't answer | Reconnect with backoff |
+| 1001 | The hub is shutting down (a restart, say) | Reconnect with backoff: it may be back in a moment |
 
 After `welcome`, a message the hub can't take doesn't close the connection. A `command` or
 `transfer` with an `id` is answered with a `result` that carries the error
@@ -333,6 +334,9 @@ how:
 
 - The hub pings each connection every 30 s (WebSocket ping) and drops one that hasn't answered by
   the next ping.
+- Clients ping the hub too, so that a connection that died without a close frame (the hub
+  crashed, the network went away) is noticed before their next message, which would otherwise be
+  the first to fail. A hub that shuts down closes every connection with `1001` first.
 - Clients reconnect with backoff, then send `hello` and a state report again.
 - On iOS and Android, an app playing in the background keeps running and keeps its connection. A
   paused app in the background gets suspended: it stays listed as offline with its last state, so
