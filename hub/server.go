@@ -18,6 +18,9 @@ const (
 	maxFrameLen = 1 << 20
 )
 
+// probeWait is how long a device has to answer the ping of a Probe; a var, for the tests.
+var probeWait = 5 * time.Second
+
 var upgrader = websocket.Upgrader{
 	// Devices sign in inside the connection (hello), not with cookies, so a page from another origin
 	// gains nothing by connecting. Accepting any origin lets web players on other origins work.
@@ -110,6 +113,7 @@ type frame struct {
 	data      []byte
 	closeCode int // a close frame when not zero
 	reason    string
+	probe     bool // a ping that the device has probeWait to answer
 }
 
 func (c *wsConn) Send(msg any) {
@@ -123,6 +127,12 @@ func (c *wsConn) Send(msg any) {
 
 func (c *wsConn) Close(code int, reason string) {
 	c.enqueue(frame{closeCode: code, reason: reason})
+}
+
+// Probe pings the device after what was sent before, and gives it probeWait to answer, rather than
+// pongWait: a device that doesn't is dropped.
+func (c *wsConn) Probe() {
+	c.enqueue(frame{probe: true})
 }
 
 func (c *wsConn) enqueue(f frame) {
@@ -150,6 +160,19 @@ func (c *wsConn) writeLoop() {
 				// The device answers with its own close frame, which ends the read loop.
 				time.AfterFunc(closeGrace, func() { _ = c.ws.Close() })
 				return
+			}
+
+			if f.probe {
+				// The deadline first: a pong that came before it would be undone by it. The pong
+				// handler puts pongWait back, and so does any message.
+				_ = c.ws.SetReadDeadline(time.Now().Add(probeWait))
+
+				if c.ws.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)) != nil {
+					_ = c.ws.Close()
+					return
+				}
+
+				continue
 			}
 
 			_ = c.ws.SetWriteDeadline(time.Now().Add(writeWait))

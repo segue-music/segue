@@ -199,10 +199,11 @@ for a track it hears of halfway, which shows it without counting.
   take turns kicking each other out.
 - Fail the requests still waiting for an answer when the connection closes.
 - The hub pings every 30 s. WebSocket libraries usually answer by themselves.
-- Ping the hub too. A hub that crashed, or a network that went away, leaves the connection open on
-  your side, through a reverse proxy especially, until you send something, and that first command
-  fails. The reference app pings every 15 s (`pingInterval` of dart:io's WebSocket), which notices
-  it within 30 s. A hub that shuts down normally closes with `1001`, and you reconnect at once.
+- Give each request a deadline. The hub answers a command within 10 s and a transfer within 20 s;
+  with no answer past that, the connection died without a close (a hub that crashed, a network
+  that went away, which a reverse proxy can keep open on your side): close it and reconnect. The
+  reference app waits 25 s, and sends no pings of its own, to spare phones' batteries. A hub that
+  shuts down normally closes with `1001`, and you reconnect at once.
 - Log the hub's `error` messages: each says that a message of yours had no effect, and why
   ([SPEC, section 2](SPEC.md#2-connection-and-authentication)).
 - Ignore message types, fields and capabilities you don't know, so that your app keeps working
@@ -260,6 +261,8 @@ Cases worth trying:
 - closing the app while it plays: the others list it paused, offline, and can take its queue;
 - on mobile, pausing and leaving the app in the background, then taking its queue from another device;
 - restarting the hub: the app reconnects and reports again;
+- the device you control going out of reach (airplane mode): a command to it fails as `offline`
+  within about 5 s, and its music comes to your app, paused, for the next play;
 - a track whose id the other app's API doesn't have.
 
 ## Reference code

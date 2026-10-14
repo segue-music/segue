@@ -333,10 +333,14 @@ how:
 ## 9. Liveness and mobile apps
 
 - The hub pings each connection every 30 s (WebSocket ping) and drops one that hasn't answered by
-  the next ping.
-- Clients ping the hub too, so that a connection that died without a close frame (the hub
-  crashed, the network went away) is noticed before their next message, which would otherwise be
-  the first to fail. A hub that shuts down closes every connection with `1001` first.
+  the next ping. It also pings a player as it sends it a command, and drops it if it doesn't
+  answer within 5 s: a player that went out of reach fails the command as `offline`, and goes
+  offline for the other devices, without waiting for the timeout or the next ping.
+- A hub that shuts down closes every connection with `1001` first. One that died without closing
+  them (it crashed, the network went away) can leave them open on the client's side, behind a
+  proxy especially, until the client sends something. Clients need no pings of their own for it,
+  which would cost phones battery: the hub answers a command within 10 s and a transfer within
+  20 s, so a request with no answer for longer means a dead connection, to close and make again.
 - Clients reconnect with backoff, then send `hello` and a state report again.
 - On iOS and Android, an app playing in the background keeps running and keeps its connection. A
   paused app in the background gets suspended: it stays listed as offline with its last state, so

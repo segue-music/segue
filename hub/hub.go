@@ -40,9 +40,20 @@ type Options struct {
 
 // Conn is the hub's side of one connection. Send and Close must not block: the hub calls them
 // while holding its lock. Close sends a close frame after whatever was already sent.
+//
+// A Conn may also have a Probe method, which must not block either. The hub calls it as it sends
+// a player a command, and it drops the connection if the device doesn't answer within a few
+// seconds (a ping, say): a player that went away, out of reach with nothing closed, fails the
+// command as offline and goes offline for the others, without waiting for the timeout or the next
+// ping (SPEC.md, section 9).
 type Conn interface {
 	Send(msg any)
 	Close(code int, reason string)
+}
+
+// prober is a Conn with a Probe method.
+type prober interface {
+	Probe()
 }
 
 // Hub keeps the devices of each user, relays their state to the user's other devices and routes
@@ -675,6 +686,11 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 	p := &pending{target: target, done: make(chan outcome, 1)}
 	h.pending[id] = p
 	target.conn.Send(commandMsg{Type: "command", ID: id, From: from, Command: command})
+
+	if probed, ok := target.conn.(prober); ok {
+		probed.Probe()
+	}
+
 	h.mu.Unlock()
 
 	timer := time.NewTimer(h.opts.CommandTimeout)

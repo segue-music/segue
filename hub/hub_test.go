@@ -934,6 +934,53 @@ func TestCommandTimeoutAndDisconnect(t *testing.T) {
 	}
 }
 
+func TestAPlayerThatDoesntAnswerTheProbeGoesOffline(t *testing.T) {
+	saved := probeWait
+	probeWait = 200 * time.Millisecond
+
+	t.Cleanup(func() { probeWait = saved })
+
+	url, _ := startHub(t, Options{})
+	ws, _, err := websocket.DefaultDialer.Dial(url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = ws.Close() })
+
+	hello := map[string]any{
+		"type": "hello", "protocol": ProtocolVersion, "auth": as("alice"),
+		"device": info("phone", Subsonic, player, everything...),
+	}
+
+	if err := ws.WriteJSON(hello); err != nil {
+		t.Fatal(err)
+	}
+
+	// The welcome, and nothing read after it, so no ping is answered: a phone out of reach, whose
+	// connection nothing closed.
+	if _, _, err := ws.ReadMessage(); err != nil {
+		t.Fatal(err)
+	}
+
+	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
+	// Offline as soon as the probe goes unanswered, not after the command's 10 s, nor at the next ping.
+	pc.send(map[string]any{"type": "command", "id": "c", "target": "phone", "command": map[string]any{"action": "play"}})
+
+	if r := pc.expect("result"); r.Error != "offline" {
+		t.Fatalf("result %+v", r)
+	}
+
+	_, welcome := join(t, url, as("alice"), info("laptop", Subsonic, controller))
+
+	for _, d := range welcome.Devices {
+		if d.ID == "phone" && d.Online {
+			t.Fatal("the phone is still online for the others")
+		}
+	}
+}
+
 func TestSweepForgetsOldOfflineDevices(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	url, h := startHub(t, Options{Now: c.Now, OfflineTTL: time.Hour})
