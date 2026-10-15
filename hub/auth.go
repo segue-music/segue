@@ -19,25 +19,25 @@ import (
 // hub can tell a wrong password from "try again later".
 type Authenticator func(ctx context.Context, auth Auth) (user string, ok bool, err error)
 
-// UpstreamKind is the kind of media server behind the hub.
-type UpstreamKind string
+// MediaServerKind is the kind of media server behind the hub.
+type MediaServerKind string
 
 // The kinds of media server the hub works with.
 const (
-	KindNavidrome UpstreamKind = "navidrome" // Subsonic API, plus the Jellyfin API at /jellyfin
-	KindSubsonic  UpstreamKind = "subsonic"
-	KindJellyfin  UpstreamKind = "jellyfin"
+	KindNavidrome MediaServerKind = "navidrome" // Subsonic API, plus the Jellyfin API at /jellyfin
+	KindSubsonic  MediaServerKind = "subsonic"
+	KindJellyfin  MediaServerKind = "jellyfin"
 )
 
-// ErrNotAMediaServer is DetectUpstream's answer for a URL that answers, but as neither a Subsonic
-// nor a Jellyfin server.
+// ErrNotAMediaServer is DetectMediaServer's answer for a URL that answers, but as neither a
+// Subsonic nor a Jellyfin server.
 var ErrNotAMediaServer = errors.New("hub: neither a Subsonic nor a Jellyfin server")
 
-// DetectUpstream asks the media server at baseURL what it is: its answer to a Subsonic ping without
-// credentials (whose OpenSubsonic type says Navidrome), or else to Jellyfin's public system info.
-// Any error other than ErrNotAMediaServer means it couldn't be asked (network error, HTTP 5xx), and
-// asking again may work.
-func DetectUpstream(ctx context.Context, baseURL string) (UpstreamKind, error) {
+// DetectMediaServer asks the media server at baseURL what it is: its answer to a Subsonic ping
+// without credentials (whose OpenSubsonic type says Navidrome), or else to Jellyfin's public system
+// info. Any error other than ErrNotAMediaServer means it couldn't be asked (network error, HTTP
+// 5xx), and asking again may work.
+func DetectMediaServer(ctx context.Context, baseURL string) (MediaServerKind, error) {
 	base := strings.TrimRight(baseURL, "/")
 	client := &http.Client{Timeout: 5 * time.Second}
 
@@ -125,7 +125,7 @@ func DevAuthenticator(_ context.Context, auth Auth) (string, bool, error) {
 const clientName = "segue-hub"
 
 // jellyfinBase is where the media server at baseURL has its Jellyfin API.
-func jellyfinBase(kind UpstreamKind, baseURL string) string {
+func jellyfinBase(kind MediaServerKind, baseURL string) string {
 	base := strings.TrimRight(baseURL, "/")
 
 	if kind == KindNavidrome {
@@ -135,9 +135,9 @@ func jellyfinBase(kind UpstreamKind, baseURL string) string {
 	return base
 }
 
-// UpstreamAuthenticator checks credentials with the media server itself, so the hub keeps no users
-// or passwords of its own. Successful checks are cached for cacheFor.
-func UpstreamAuthenticator(kind UpstreamKind, baseURL string, cacheFor time.Duration) Authenticator {
+// MediaServerAuthenticator checks credentials with the media server itself, so the hub keeps no
+// users or passwords of its own. Successful checks are cached for cacheFor.
+func MediaServerAuthenticator(kind MediaServerKind, baseURL string, cacheFor time.Duration) Authenticator {
 	base := strings.TrimRight(baseURL, "/")
 	jellyfinBaseURL := jellyfinBase(kind, baseURL)
 	client := &http.Client{Timeout: 5 * time.Second}

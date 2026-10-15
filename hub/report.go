@@ -222,10 +222,10 @@ func jellyfinAuthorization(p Playback) string {
 	return "MediaBrowser " + strings.Join(fields, ", ")
 }
 
-// UpstreamReporter reports to the media server at baseURL in the API of each device's credentials:
-// Jellyfin's sessions for a jellyfin token (under /jellyfin on Navidrome), the Subsonic API for the
-// others.
-func UpstreamReporter(kind UpstreamKind, baseURL string) Reporter {
+// MediaServerReporter reports to the media server at baseURL in the API of each device's
+// credentials: Jellyfin's sessions for a jellyfin token (under /jellyfin on Navidrome), the Subsonic
+// API for the others.
+func MediaServerReporter(kind MediaServerKind, baseURL string) Reporter {
 	subsonic, jellyfin := SubsonicReporter(baseURL), JellyfinReporter(jellyfinBase(kind, baseURL))
 
 	return func(ctx context.Context, p Playback) error {

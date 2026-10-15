@@ -662,7 +662,7 @@ func TestJellyfinReporterForgetsATrackWhoseStopFailed(t *testing.T) {
 	expectPaths(t, requests, "/Sessions/Playing", "/Sessions/Playing/Stopped", "/Sessions/Playing")
 }
 
-func TestUpstreamReporterUsesTheAPIOfTheCredentials(t *testing.T) {
+func TestMediaServerReporterUsesTheAPIOfTheCredentials(t *testing.T) {
 	// Navidrome: Subsonic at the root, Jellyfin under /jellyfin.
 	requests := make(chan string, 100)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -676,7 +676,7 @@ func TestUpstreamReporterUsesTheAPIOfTheCredentials(t *testing.T) {
 	}))
 	defer server.Close()
 
-	report := UpstreamReporter(KindNavidrome, server.URL)
+	report := MediaServerReporter(KindNavidrome, server.URL)
 	jellyfinTrack := Playback{Auth: Auth{Scheme: "jellyfin", Token: "jf"}, Device: "tv", DeviceID: "tv", Client: "test", ID: songs[0]["id"].(string), Status: Playing}
 
 	if err := report(context.Background(), jellyfinTrack); err != nil {

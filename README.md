@@ -72,12 +72,12 @@ devices send it their credentials.
 ### With Docker
 
 The image `ghcr.io/segue-music/segue-hub`, for amd64, arm64 and armv7, listens on `0.0.0.0:8480`
-and keeps the last playbacks in `/data` (`SEGUE_STATE=/data/state.json`). `SEGUE_UPSTREAM` is the
-media server as the container reaches it, such as by its name on a network they share:
+and keeps the last playbacks in `/data` (`SEGUE_STATE=/data/state.json`). `SEGUE_MEDIA_SERVER_URL`
+is the media server as the container reaches it, such as by its name on a network they share:
 
 ```sh
 docker run -d --name segue-hub --restart unless-stopped --network <the media server's network> \
-  -p 127.0.0.1:8480:8480 -v segue-hub:/data -e SEGUE_UPSTREAM=http://navidrome:4533 \
+  -p 127.0.0.1:8480:8480 -v segue-hub:/data -e SEGUE_MEDIA_SERVER_URL=http://navidrome:4533 \
   ghcr.io/segue-music/segue-hub
 ```
 
@@ -97,7 +97,7 @@ Needs Go 1.27.
 cd hub
 go test -race ./...
 go build -o segue-hub ./cmd/segue-hub
-SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
+SEGUE_MEDIA_SERVER_URL=http://127.0.0.1:4533 ./segue-hub
 ```
 
 `docker build -t segue-hub hub/` builds the image from this repository.
@@ -106,10 +106,10 @@ SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
 
 | Variable | Default | |
 |---|---|---|
-| `SEGUE_UPSTREAM` | (required, except with `SEGUE_AUTH=none`) | The media server's URL, as the hub reaches it. The hub asks it at startup, until it answers, whether it is Navidrome (Subsonic API, Jellyfin API at `/jellyfin`, ids translated), another Subsonic server or Jellyfin |
+| `SEGUE_MEDIA_SERVER_URL` | (required, except with `SEGUE_AUTH=none`) | The media server's URL, as the hub reaches it. The hub asks it at startup, until it answers, whether it is Navidrome (Subsonic API, Jellyfin API at `/jellyfin`, ids translated), another Subsonic server or Jellyfin. Its old name, `SEGUE_UPSTREAM`, still works for now, with a warning in the log |
 | `SEGUE_LISTEN` | `127.0.0.1:8480` | Address and port |
 | `SEGUE_STATE` | | A file where each user's last playback is kept across restarts (SPEC, section 7). Empty keeps it in memory only |
-| `SEGUE_AUTH` | | `none` accepts any device, as the Subsonic user it claims (`dev` for other schemes). Only for trying things out, and then without a media server if `SEGUE_UPSTREAM` is empty. Of the pages in a browser, only those served from the same machine (`localhost`) find it and connect, since any other could then act as anyone |
+| `SEGUE_AUTH` | | `none` accepts any device, as the Subsonic user it claims (`dev` for other schemes). Only for trying things out, and then without a media server if `SEGUE_MEDIA_SERVER_URL` is empty. Of the pages in a browser, only those served from the same machine (`localhost`) find it and connect, since any other could then act as anyone |
 
 The hub logs to standard output. Stopping it (`SIGTERM`, as `docker stop` sends) closes every
 device's connection first, so that apps reconnect as soon as it is back, and writes the last

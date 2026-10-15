@@ -26,7 +26,7 @@ go vet ./... && gofmt -l .                   # gofmt lists the files it would ch
 go test -race ./...
 go test -race -run TestTransfer ./...        # one test
 go build -o segue-hub ./cmd/segue-hub
-SEGUE_UPSTREAM=http://127.0.0.1:4533 ./segue-hub
+SEGUE_MEDIA_SERVER_URL=http://127.0.0.1:4533 ./segue-hub
 ```
 
 Without Go installed, the same through Docker (from `hub/`):
@@ -42,10 +42,12 @@ The image (`hub/Dockerfile`) is `scratch` with the binary, cross-compiled for ea
 `.github/workflows/hub-image.yml` publishes it as `ghcr.io/segue-music/segue-hub` (amd64, arm64,
 armv7) on each push to `main` that changes `hub/`, after `go vet`, `gofmt` and the tests.
 
-Configuration is all environment variables (`SEGUE_UPSTREAM`, `SEGUE_LISTEN`, `SEGUE_STATE`,
-`SEGUE_AUTH`); see the table in `README.md`. The hub asks `SEGUE_UPSTREAM` what it is at startup
-(`DetectUpstream`), and waits for it to answer. `SEGUE_AUTH=none` accepts any device as the user it
-claims, for tests and demos only, and lets `SEGUE_UPSTREAM` be empty (the hub then assumes Navidrome).
+Configuration is all environment variables (`SEGUE_MEDIA_SERVER_URL`, `SEGUE_LISTEN`,
+`SEGUE_STATE`, `SEGUE_AUTH`); see the table in `README.md`. The hub asks `SEGUE_MEDIA_SERVER_URL`
+what it is at startup (`DetectMediaServer`), and waits for it to answer. `SEGUE_AUTH=none` accepts
+any device as the user it claims, for tests and demos only, and lets `SEGUE_MEDIA_SERVER_URL` be
+empty (the hub then assumes Navidrome). `SEGUE_UPSTREAM`, its name until October 2026, still works,
+with a warning in the log, so that hubs set up with it don't break.
 
 The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binary built here, at
 `hub/segue-hub`, with `SEGUE_AUTH=none`, and find its port by parsing the log line
@@ -61,12 +63,12 @@ The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binar
 - All hub state sits behind a single `h.mu`. Helpers marked "Call with h.mu held" assume it.
   Commands to players (`request`) wait for the answer outside the lock, matched by id through
   `pending`.
-- `Options` holds the pluggable parts: `Authenticator` (`UpstreamAuthenticator` asks the media
+- `Options` holds the pluggable parts: `Authenticator` (`MediaServerAuthenticator` asks the media
   server who the credentials belong to and caches successes; `DevAuthenticator` for
   `SEGUE_AUTH=none`), `IDTranslator` (`NavidromeIDs` converts between Subsonic base62 ids and
   Jellyfin GUIDs, mirroring Navidrome's own code), and an injectable clock (`Now`) used by the tests.
-- `DetectUpstream` (`auth.go`) tells the kind of media server from a Subsonic ping without
-  credentials (OpenSubsonic's `type` says Navidrome) or Jellyfin's `System/Info/Public`.
+- `DetectMediaServer` (`auth.go`) tells the kind of media server from a Subsonic ping
+  without credentials (OpenSubsonic's `type` says Navidrome) or Jellyfin's `System/Info/Public`.
   `ErrNotAMediaServer` is a wrong URL; other errors are a server not answering yet.
 - Messages are built per recipient (`broadcast`, `view`), because each device receives queue ids in
   its own API (`subsonic` or `jellyfin`).
@@ -78,10 +80,10 @@ The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binar
   hub never waits on the media server; it merges a device's reports of a track but keeps stops and
   starts, so that a track ends before the next starts and Jellyfin counts each start.
   `reportAgain` repeats an unchanged report every minute, since Jellyfin drops a playback it hears
-  nothing of. `UpstreamReporter` picks the API by the device's credentials: `SubsonicReporter` uses
-  `reportPlayback` (OpenSubsonic `playbackReport`), or `scrobble`'s now playing where the server
-  lacks it; `JellyfinReporter` uses Jellyfin's sessions, signed as the device, and counts a play
-  (`Sessions/Playing`) only for a track that starts from its start.
+  nothing of. `MediaServerReporter` picks the API by the device's credentials: `SubsonicReporter`
+  uses `reportPlayback` (OpenSubsonic `playbackReport`), or `scrobble`'s now playing where the
+  server lacks it; `JellyfinReporter` uses Jellyfin's sessions, signed as the device, and counts a
+  play (`Sessions/Playing`) only for a track that starts from its start.
 - `Handler` serves `/v1/info` and `/v1/ws` both at the root and under `/connect/`, whether or not
   the reverse proxy strips the prefix. Pages in a browser reach both from any origin, unless
   `Options.AllowOrigin` says otherwise: with `SEGUE_AUTH=none`, `cmd/segue-hub` allows only pages

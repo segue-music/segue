@@ -28,28 +28,35 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	upstream := os.Getenv("SEGUE_UPSTREAM")
+	mediaServerURL := os.Getenv("SEGUE_MEDIA_SERVER_URL")
+
+	// SEGUE_UPSTREAM was its name until October 2026: a hub set up with it goes on working.
+	if old := os.Getenv("SEGUE_UPSTREAM"); mediaServerURL == "" && old != "" {
+		log.Warn("SEGUE_UPSTREAM is now called SEGUE_MEDIA_SERVER_URL; the old name will stop working")
+		mediaServerURL = old
+	}
+
 	devAuth := os.Getenv("SEGUE_AUTH") == "none"
-	if upstream == "" && !devAuth {
-		fail("SEGUE_UPSTREAM is required (the media server's URL)")
+	if mediaServerURL == "" && !devAuth {
+		fail("SEGUE_MEDIA_SERVER_URL is required (the media server's URL)")
 	}
 
 	kind := hub.KindNavidrome // SEGUE_AUTH=none with no media server: nothing to ask
 
-	if upstream != "" {
+	if mediaServerURL != "" {
 		var err error
 
-		kind, err = detectUpstream(ctx, log, upstream)
+		kind, err = detectMediaServer(ctx, log, mediaServerURL)
 
 		if ctx.Err() != nil {
 			return
 		}
 
 		if err != nil {
-			fail("SEGUE_UPSTREAM is not a Navidrome, Subsonic or Jellyfin server", "upstream", upstream, "err", err)
+			fail("SEGUE_MEDIA_SERVER_URL is not a Navidrome, Subsonic or Jellyfin server", "mediaServer", mediaServerURL, "err", err)
 		}
 
-		log.Info("media server found", "upstream", upstream, "kind", kind)
+		log.Info("media server found", "mediaServer", mediaServerURL, "kind", kind)
 	}
 
 	var authenticate hub.Authenticator
@@ -64,8 +71,8 @@ func main() {
 		// an app's development server.
 		allowOrigin = loopbackOrigin
 	} else {
-		authenticate = hub.UpstreamAuthenticator(kind, upstream, 5*time.Minute)
-		report = hub.UpstreamReporter(kind, upstream)
+		authenticate = hub.MediaServerAuthenticator(kind, mediaServerURL, 5*time.Minute)
+		report = hub.MediaServerReporter(kind, mediaServerURL)
 	}
 
 	translate := hub.NoTranslation
@@ -86,7 +93,7 @@ func main() {
 
 	server := &http.Server{Handler: h.Handler(map[string]any{"server": kind}), ReadHeaderTimeout: 10 * time.Second}
 
-	log.Info("hub listening", "url", "http://"+listener.Addr().String(), "upstream", upstream, "kind", kind)
+	log.Info("hub listening", "url", "http://"+listener.Addr().String(), "mediaServer", mediaServerURL, "kind", kind)
 
 	go func() {
 		sweep := time.NewTicker(10 * time.Minute)
@@ -113,18 +120,18 @@ func main() {
 	h.Close()
 }
 
-// detectUpstream asks the media server what it is until it answers, since it may be starting at
+// detectMediaServer asks the media server what it is until it answers, since it may be starting at
 // the same time as the hub. A URL that answers as no media server is an error.
-func detectUpstream(ctx context.Context, log *slog.Logger, upstream string) (hub.UpstreamKind, error) {
+func detectMediaServer(ctx context.Context, log *slog.Logger, mediaServerURL string) (hub.MediaServerKind, error) {
 	wait := time.Second
 
 	for {
-		kind, err := hub.DetectUpstream(ctx, upstream)
+		kind, err := hub.DetectMediaServer(ctx, mediaServerURL)
 		if err == nil || errors.Is(err, hub.ErrNotAMediaServer) {
 			return kind, err
 		}
 
-		log.Warn("media server not answering yet", "upstream", upstream, "err", err, "retryIn", wait)
+		log.Warn("media server not answering yet", "mediaServer", mediaServerURL, "err", err, "retryIn", wait)
 
 		select {
 		case <-ctx.Done():
