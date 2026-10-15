@@ -36,6 +36,11 @@ type Options struct {
 	// Report tells the media server what each device plays (SPEC.md, section 12). Nil reports
 	// nothing.
 	Report Reporter
+	// AllowOrigin says whether a page in a browser, served from origin (its Origin header), may find
+	// the hub and connect to it. Nil allows any: the hub signs devices in by their hello alone, never
+	// by cookies, so a page from another origin gains nothing by connecting (SPEC.md, section 10). The
+	// hub's own origin is always allowed, and so are apps outside a browser, which send no origin.
+	AllowOrigin func(origin string) bool
 }
 
 // Conn is the hub's side of one connection. Send and Close must not block: the hub calls them
@@ -75,8 +80,17 @@ type Hub struct {
 	drained            chan struct{} // closed once no device is online, while Close waits for that
 }
 
-// closeWait is how long Close waits for the devices to answer its close frames.
-const closeWait = 2 * time.Second
+const (
+	// closeWait is how long Close waits for the devices to answer its close frames.
+	closeWait = 2 * time.Second
+	// maxDevices is how many devices a user keeps before another one signing in makes the hub forget
+	// the offline one it saw longest ago, so that a client that signs in under a new id each time
+	// can't fill the hub with offline devices and their queues.
+	maxDevices = 50
+	// maxWaiting is how many commands a player can have waiting for its answer. Past it, it isn't
+	// answering, and others fail at once with timeout rather than pile up for CommandTimeout.
+	maxWaiting = 32
+)
 
 type entry struct {
 	user     string
@@ -85,6 +99,7 @@ type entry struct {
 	conn     Conn // nil while offline
 	state    *StampedState
 	lastSeen time.Time
+	waiting  int // commands sent to it that wait for its answer
 	// reported is what the media server last heard of its playback, at hub time reportedAt.
 	reported   *Playback
 	reportedAt int64
@@ -136,6 +151,7 @@ func New(opts Options) *Hub {
 
 	if opts.Report != nil {
 		h.reports = startReports(opts.Report, log)
+
 		ticker, done := time.NewTicker(reportAgainAfter/4), make(chan struct{})
 
 		go func() {
@@ -148,6 +164,7 @@ func New(opts Options) *Hub {
 				}
 			}
 		}()
+
 		h.stopReportingAgain = sync.OnceFunc(func() {
 			ticker.Stop()
 			close(done)
@@ -253,7 +270,12 @@ func (s *Session) Message(ctx context.Context, raw []byte) {
 
 	if !s.greeted {
 		s.greeted = true
-		s.helloTimer.Stop()
+
+		// Too late: the timer has already closed the connection with 4002, and the device, told
+		// not to reconnect, mustn't be listed as online.
+		if !s.helloTimer.Stop() {
+			return
+		}
 
 		if err != nil {
 			s.conn.Close(CloseBadHello, "malformed hello")
@@ -291,18 +313,42 @@ func (h *Hub) Sweep() {
 	cutoff := h.opts.Now().Add(-h.opts.OfflineTTL)
 
 	for user, devices := range h.users {
-		for id, e := range devices {
-			if e.conn != nil || !e.lastSeen.Before(cutoff) {
-				continue
+		for _, e := range devices {
+			if e.conn == nil && e.lastSeen.Before(cutoff) {
+				h.forget(e)
 			}
-
-			delete(devices, id)
-			h.broadcast(e, func(*entry) any { return goneMsg{Type: "gone", DeviceID: id} })
 		}
 
 		if len(devices) == 0 {
 			delete(h.users, user)
 		}
+	}
+}
+
+// forget drops an offline device, and tells the user's other devices it is gone. Call with h.mu
+// held.
+func (h *Hub) forget(e *entry) {
+	delete(h.users[e.user], e.info.ID)
+	h.broadcast(e, func(*entry) any { return goneMsg{Type: "gone", DeviceID: e.info.ID} })
+}
+
+// makeRoom keeps a user's devices under maxDevices as another one signs in, by forgetting the
+// offline one seen longest ago. Online ones stay: each is a connection. Call with h.mu held.
+func (h *Hub) makeRoom(devices map[string]*entry) {
+	if len(devices) < maxDevices {
+		return
+	}
+
+	var oldest *entry
+
+	for _, e := range devices {
+		if e.conn == nil && (oldest == nil || e.lastSeen.Before(oldest.lastSeen)) {
+			oldest = e
+		}
+	}
+
+	if oldest != nil {
+		h.forget(oldest)
 	}
 }
 
@@ -346,10 +392,17 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 	var replaced Conn
 
 	if e == nil {
+		h.makeRoom(devices)
 		e = &entry{user: strings.ToLower(user)}
 		devices[info.ID] = e
 	} else {
 		replaced = e.conn
+	}
+
+	// The app signed in again through the other API: what it had is in the ids of the one before.
+	if e.state != nil && e.info.API != info.API {
+		state := h.translateState(*e.state, e.info.API, info.API)
+		e.state = &state
 	}
 
 	e.info, e.auth, e.conn, e.lastSeen = info, auth, conn, h.opts.Now()
@@ -415,23 +468,18 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 		h.notePlayback(e)
 	}
 
-	e.auth = Auth{}
+	// Its credentials go with it (SPEC.md, section 10), those of its last report too. That one was a
+	// stop (or the hub is closing), and to notePlayback no report says the same.
+	e.auth, e.reported = Auth{}, nil
 	h.announce(e)
 	h.noteDrained()
 	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name)
 }
 
+// dispatch hands a message to its handler. Each one drops a late message from a connection that
+// was replaced (e.conn != conn), checked under the same lock in which it acts on it, since the
+// device's new connection may take over at any time.
 func (h *Hub) dispatch(e *entry, conn Conn, msg incoming) {
-	h.mu.Lock()
-
-	current := e.conn == conn
-
-	h.mu.Unlock()
-
-	if !current {
-		return // late message on a connection that was replaced
-	}
-
 	switch msg.Type {
 	case "state":
 		h.onState(e, conn, msg)
@@ -440,7 +488,7 @@ func (h *Hub) dispatch(e *entry, conn Conn, msg incoming) {
 	case "transfer":
 		go h.onTransfer(e, conn, msg)
 	case "result":
-		h.onResult(e, msg)
+		h.onResult(e, conn, msg)
 	default:
 		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
 	}
@@ -454,6 +502,8 @@ func (h *Hub) onState(e *entry, conn Conn, msg incoming) {
 	defer h.mu.Unlock()
 
 	switch {
+	case e.conn != conn:
+		return // late message on a connection that was replaced
 	case !e.info.isPlayer():
 		conn.Send(errorMsg{Type: "error", Error: codeNotPlayer})
 		return
@@ -527,10 +577,15 @@ func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 
 	h.mu.Lock()
 
+	current := e.conn == conn
 	target := h.users[e.user][msg.Target]
 	fromAPI, from := e.info.API, e.info.ID
 
 	h.mu.Unlock()
+
+	if !current {
+		return // late message on a connection that was replaced
+	}
 
 	var o outcome
 
@@ -557,6 +612,11 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	reply := func(o outcome) { conn.Send(resultMsg{Type: "result", Re: msg.ID, OK: o.ok, Error: o.err}) }
 
 	h.mu.Lock()
+
+	if e.conn != conn {
+		h.mu.Unlock()
+		return // late message on a connection that was replaced
+	}
 
 	devices := h.users[e.user]
 	source, destination := devices[msg.From], devices[msg.To]
@@ -606,7 +666,13 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 		// With the modes it played in, shuffled in the same order, which shuffle going off takes back.
 		handoff = Command{
 			Action: ActSetQueue, Queue: state.Queue, Index: &index, PositionMs: &position, Play: &play,
-			Repeat: state.Repeat, Shuffle: state.Shuffle, Order: state.Order,
+			Repeat: state.Repeat, Shuffle: state.Shuffle,
+		}
+
+		// An order goes only with a shuffled queue (SPEC.md, section 5), and a player that turned
+		// shuffle off without reporting its queue again still has one.
+		if state.Shuffle != nil && *state.Shuffle {
+			handoff.Order = state.Order
 		}
 	}
 
@@ -643,12 +709,12 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	reply(o)
 }
 
-func (h *Hub) onResult(e *entry, msg incoming) {
+func (h *Hub) onResult(e *entry, conn Conn, msg incoming) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	p := h.pending[msg.Re]
-	if p == nil || p.target != e {
+	if e.conn != conn || p == nil || p.target != e {
 		return // late, or not this device's to answer
 	}
 
@@ -676,6 +742,9 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 	case !target.info.obeys(command.Action):
 		h.mu.Unlock()
 		return outcome{err: codeUnsupported}
+	case target.waiting >= maxWaiting:
+		h.mu.Unlock()
+		return outcome{err: codeTimeout} // it hasn't answered those before
 	}
 
 	if command.Action == ActSetQueue || command.Action == ActAddToQueue {
@@ -685,6 +754,7 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 	id := newID()
 	p := &pending{target: target, done: make(chan outcome, 1)}
 	h.pending[id] = p
+	target.waiting++
 	target.conn.Send(commandMsg{Type: "command", ID: id, From: from, Command: command})
 
 	if probed, ok := target.conn.(prober); ok {
@@ -701,17 +771,10 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 		return o
 	case <-timer.C:
 		h.mu.Lock()
-
-		_, waiting := h.pending[id]
-
-		delete(h.pending, id)
+		h.finish(id, outcome{err: codeTimeout}) // unless the answer arrived just as time ran out
 		h.mu.Unlock()
 
-		if !waiting {
-			return <-p.done // the answer arrived just as time ran out
-		}
-
-		return outcome{err: codeTimeout}
+		return <-p.done
 	}
 }
 
@@ -719,6 +782,7 @@ func (h *Hub) request(target *entry, command Command, fromAPI API, from string) 
 func (h *Hub) finish(id string, o outcome) {
 	if p := h.pending[id]; p != nil {
 		delete(h.pending, id)
+		p.target.waiting--
 		p.done <- o
 	}
 }

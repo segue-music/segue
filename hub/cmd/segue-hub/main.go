@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -37,6 +38,7 @@ func main() {
 
 	if upstream != "" {
 		var err error
+
 		kind, err = detectUpstream(ctx, log, upstream)
 
 		if ctx.Err() != nil {
@@ -52,10 +54,15 @@ func main() {
 
 	var authenticate hub.Authenticator
 	var report hub.Reporter
+	var allowOrigin func(string) bool // nil: any
 
 	if devAuth {
 		log.Warn("SEGUE_AUTH=none: every device is accepted, as the user it claims. Never expose this.")
 		authenticate = hub.DevAuthenticator
+		// Whoever connects is the user they claim, so a page from the web, which a browser would let
+		// connect to a hub on the same machine, mustn't: only pages served from this one may, such as
+		// an app's development server.
+		allowOrigin = loopbackOrigin
 	} else {
 		authenticate = hub.UpstreamAuthenticator(kind, upstream, 5*time.Minute)
 		report = hub.UpstreamReporter(kind, upstream)
@@ -69,7 +76,7 @@ func main() {
 
 	h := hub.New(hub.Options{
 		Authenticate: authenticate, Translate: translate, Logger: log,
-		StatePath: os.Getenv("SEGUE_STATE"), Report: report,
+		StatePath: os.Getenv("SEGUE_STATE"), Report: report, AllowOrigin: allowOrigin,
 	})
 
 	listener, err := net.Listen("tcp", env("SEGUE_LISTEN", "127.0.0.1:8480"))
@@ -127,6 +134,19 @@ func detectUpstream(ctx context.Context, log *slog.Logger, upstream string) (hub
 
 		wait = min(2*wait, 30*time.Second)
 	}
+}
+
+// loopbackOrigin says whether origin, a page's, is served from this machine.
+func loopbackOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+
+	host := u.Hostname()
+	ip := net.ParseIP(host)
+
+	return host == "localhost" || (ip != nil && ip.IsLoopback())
 }
 
 func env(name, fallback string) string {

@@ -3,6 +3,8 @@ package hub
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,16 +23,11 @@ const (
 // probeWait is how long a device has to answer the ping of a Probe; a var, for the tests.
 var probeWait = 5 * time.Second
 
-var upgrader = websocket.Upgrader{
-	// Devices sign in inside the connection (hello), not with cookies, so a page from another origin
-	// gains nothing by connecting. Accepting any origin lets web players on other origins work.
-	CheckOrigin: func(*http.Request) bool { return true },
-}
-
 // Handler serves the hub: GET /v1/info and the WebSocket at /v1/ws. Both also answer under
 // /connect/, where the hub sits on the media server's origin (SPEC.md, "Discovery"), whether or not
-// the reverse proxy strips that prefix. info adds fields to /v1/info; Handler panics if they don't
-// encode as JSON.
+// the reverse proxy strips that prefix. Pages in a browser use both from the origins that
+// Options.AllowOrigin allows. info adds fields to /v1/info; Handler panics if they don't encode as
+// JSON.
 func (h *Hub) Handler(info map[string]any) http.Handler {
 	fields := map[string]any{}
 
@@ -44,12 +41,28 @@ func (h *Hub) Handler(info map[string]any) http.Handler {
 		panic("hub: the info for /v1/info doesn't encode as JSON: " + err.Error())
 	}
 
-	serveInfo := func(w http.ResponseWriter, _ *http.Request) {
-		// Web players on other origins find the hub too: what it says is public (SPEC.md, section 1).
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+	serveInfo := func(w http.ResponseWriter, r *http.Request) {
+		h.allowCORS(w, r)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(infoJSON)
 	}
+
+	// A browser asks first (a preflight) before a GET with headers of its own, such as an
+	// Authorization that its HTTP client adds to every request.
+	preflightInfo := func(w http.ResponseWriter, r *http.Request) {
+		h.allowCORS(w, r)
+
+		if headers := r.Header.Get("Access-Control-Request-Headers"); headers != "" {
+			w.Header().Set("Access-Control-Allow-Headers", headers)
+		}
+
+		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+		w.Header().Add("Vary", "Access-Control-Request-Headers")
+		w.WriteHeader(http.StatusNoContent)
+	}
+
+	upgrader := websocket.Upgrader{CheckOrigin: h.allowOrigin}
 
 	serveWS := func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
@@ -66,10 +79,39 @@ func (h *Hub) Handler(info map[string]any) http.Handler {
 		// GET also takes HEAD, and the mux answers other methods with a 405 and Allow. The
 		// WebSocket has no method: Upgrade answers whatever isn't a handshake.
 		mux.HandleFunc("GET "+prefix+"/v1/info", serveInfo)
+		mux.HandleFunc("OPTIONS "+prefix+"/v1/info", preflightInfo)
 		mux.HandleFunc(prefix+"/v1/ws", serveWS)
 	}
 
 	return mux
+}
+
+// allowOrigin says whether r comes from an app outside a browser, from the hub's own origin, or from
+// one that Options.AllowOrigin allows.
+func (h *Hub) allowOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" || h.opts.AllowOrigin == nil {
+		return true
+	}
+
+	u, err := url.Parse(origin)
+
+	return (err == nil && strings.EqualFold(u.Host, r.Host)) || h.opts.AllowOrigin(origin)
+}
+
+// allowCORS lets pages from the origins the hub allows read /v1/info, which is public (SPEC.md,
+// section 1): any page, without Options.AllowOrigin.
+func (h *Hub) allowCORS(w http.ResponseWriter, r *http.Request) {
+	if h.opts.AllowOrigin == nil {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		return
+	}
+
+	w.Header().Add("Vary", "Origin")
+
+	if origin := r.Header.Get("Origin"); origin != "" && h.allowOrigin(r) {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+	}
 }
 
 // serve runs one connection: a goroutine writes (messages and pings), this one reads.

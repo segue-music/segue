@@ -154,8 +154,8 @@ type DeviceInfo struct {
 	ReportsPlayback bool `json:"reportsPlayback,omitempty"`
 }
 
-// clean checks the fields and drops repeated roles and capabilities. Capabilities this hub doesn't
-// know are dropped too: a newer app still connects, without the commands this hub can't route.
+// clean checks the fields and drops repeated roles and capabilities. Roles and capabilities this hub
+// doesn't know are dropped too: a newer app still connects, without what this hub can't route.
 func (d *DeviceInfo) clean() bool {
 	if d.ID == "" || d.Name == "" || d.Client == "" || (d.API != Subsonic && d.API != Jellyfin) {
 		return false
@@ -164,11 +164,7 @@ func (d *DeviceInfo) clean() bool {
 	roles := []Role{}
 
 	for _, r := range d.Roles {
-		if r != RolePlayer && r != RoleController {
-			return false
-		}
-
-		if !slices.Contains(roles, r) {
+		if (r == RolePlayer || r == RoleController) && !slices.Contains(roles, r) {
 			roles = append(roles, r)
 		}
 	}

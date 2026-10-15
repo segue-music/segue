@@ -69,9 +69,12 @@ A client knows its media server's base URL, `B` (say `https://music.example.org`
 2. if `B` has a path, at `/connect/v1/info` on the origin of `B`.
 
 A `200` with `{"protocol": "segue", "versions": [1], ...}` means a hub is there, with its
-WebSocket at `.../connect/v1/ws`. The hub answers it with `Access-Control-Allow-Origin: *` and takes
-the WebSocket from any origin, so that apps in a browser, served from another origin, find it too.
-The server's admin publishes the hub by routing `/connect/` on the media server's origin to it.
+WebSocket at `.../connect/v1/ws`. The hub answers it, and a browser's preflight of it, with
+`Access-Control-Allow-Origin: *`, and takes the WebSocket from any origin
+([section 10](#10-security)), so that apps in a browser, served from another origin, find it too.
+They probe without credentials: a browser drops an answer with `*` to a request that carries them
+(`credentials: "include"`). The server's admin publishes the hub by routing `/connect/` on the media
+server's origin to it.
 Clients should also accept a hub URL typed by the user, and probe once per sign-in, not on every
 request.
 
@@ -120,7 +123,8 @@ Subsonic's plain-password form (`p=`) is not accepted.
 - `name`: what users see.
 - `client`, `version`: the app.
 - `api`: `subsonic` or `jellyfin`, the API the app uses. Ids in its messages belong to that API.
-- `roles`: `player`, `controller`, or both.
+- `roles`: `player`, `controller`, or both. The hub ignores the ones it doesn't know, as it does
+  capabilities.
 - `capabilities`: the commands it obeys as a player ([section 5](#5-commands)). The hub ignores
   the ones it doesn't know, and so should apps, so that a newer app still works with an older hub.
 - `reportsPlayback` (optional): `true` when the app tells the media server what it plays by itself
@@ -170,8 +174,8 @@ hub sends each device news of the user's other devices:
   Replace what you had.
 - `{"type": "state", "deviceId": "...", "state": {...}}` when a player reports. Merge it into what
   you had ([section 4](#4-player-state-and-the-clock)).
-- `{"type": "gone", "deviceId": "..."}` when an offline device expires (after 24 hours in the
-  reference hub).
+- `{"type": "gone", "deviceId": "..."}` when an offline device expires: in the reference hub, after
+  24 hours, or sooner for the one offline longest when a user with 50 devices signs in another.
 
 An offline device stays listed with its last state, so its queue can still be picked up
 ([section 6](#6-transfer)). Its clock stops as it goes offline: a device that was playing is listed
@@ -256,9 +260,10 @@ obeys and answers `{"type": "result", "re": "<hub id>", "ok": true}` (or `"ok": 
 | `setShuffle` | `shuffle` (true or false) | On, shuffle the queue, the current track still playing; off, back to the order it had. Either way, report the new `queue` |
 
 Errors the hub reports itself: `unknownDevice`; `offline`; `notPlayer`; `unsupported` (the action
-isn't in the player's `capabilities`, so it wasn't sent); `timeout` (no answer in 10 s);
-`badMessage`; `failed` (the player answered `"ok": false` with no `error`). Any other `error` is
-the player's own text.
+isn't in the player's `capabilities`, so it wasn't sent); `timeout` (no answer in 10 s, or, at
+once and without sending it, a player with many commands still unanswered: 32 in the reference
+hub); `badMessage`; `failed` (the player answered `"ok": false` with no `error`). Any other `error`
+is the player's own text.
 
 ## 6. Transfer
 
@@ -356,6 +361,12 @@ how:
   successful checks, keyed by a hash. It holds a device's credentials only in memory, while the
   device is connected, to report its playback ([section 12](#12-the-media-servers-now-playing)),
   and never writes them to disk.
+- The hub signs a connection in by its `hello` alone, never by cookies or other credentials that a
+  browser sends by itself. That is why it can take the WebSocket from any origin
+  ([section 1](#1-discovery)): a page from another origin that connects can't act as the user
+  without their credentials. A hub that does take such credentials, as a media server might take
+  its own session cookie ([section 13](#13-inside-a-media-server)), takes the WebSocket only from
+  its own origins.
 - A device sees and commands only devices of the same user.
 - Commands reach only players, and only for the actions they declared.
 - `hello` carries credentials, so the hub must be reached over TLS (`wss://`) and run by the media
@@ -429,7 +440,8 @@ it the same way: the server answers `/connect/v1/info` and the WebSocket on its 
   playback again every minute is for Jellyfin's sessions, and isn't needed.
 - **Last playback** ([section 7](#7-last-playback)): kept with the user's other data.
 - **Its own player**: the server's web UI can be a device like any app, signing in with the session
-  it already has.
+  it already has: in the `hello`'s `auth`, or by the session's cookie, with the WebSocket then taken
+  only from the server's own origin ([section 10](#10-security)).
 
 The reference hub is a Go package whose checks, id translation and reports are pluggable
 (`Authenticate`, `Translate` and `Report` in its `Options`), so a server in Go can run it inside,

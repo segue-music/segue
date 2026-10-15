@@ -33,6 +33,11 @@ type Playback struct {
 // its own, one report at a time.
 type Reporter func(ctx context.Context, p Playback) error
 
+// How long the server's extensions, as getOpenSubsonicExtensions gives them, hold before
+// SubsonicReporter asks again, so that an upgraded server is noticed; and how long until it asks
+// again when it couldn't get them. Vars, for the tests.
+var extensionsHold, extensionsRetry = time.Hour, time.Minute
+
 // SubsonicReporter reports through the Subsonic API at baseURL: with reportPlayback (OpenSubsonic's
 // playbackReport extension, in Navidrome since 0.62) where the server offers it, otherwise with
 // scrobble's "now playing", which knows no pause or stop. Neither counts as a play.
@@ -53,13 +58,14 @@ func SubsonicReporter(baseURL string) Reporter {
 		if now := time.Now(); !now.Before(recheck) {
 			var answer subsonicAnswer
 
-			_, err := getJSON(ctx, client, base+"/rest/getOpenSubsonicExtensions.view?"+query.Encode(), nil, &answer)
-			extended = slices.ContainsFunc(answer.Response.Extensions, func(e extension) bool { return e.Name == "playbackReport" })
-			// An answer holds for an hour, so that an upgraded server is noticed; a failure, a minute.
-			recheck = now.Add(time.Hour)
-
-			if err != nil {
-				recheck = now.Add(time.Minute)
+			found, err := getJSON(ctx, client, base+"/rest/getOpenSubsonicExtensions.view?"+query.Encode(), nil, &answer)
+			if err != nil || !found || answer.Response.Status != "ok" {
+				// A failure (the server restarting, say) keeps what the hub knew: falling back to
+				// scrobble, it would drop every pause and stop until it asked again.
+				recheck = now.Add(extensionsRetry)
+			} else {
+				extended = slices.ContainsFunc(answer.Response.Extensions, func(e extension) bool { return e.Name == "playbackReport" })
+				recheck = now.Add(extensionsHold)
 			}
 		}
 
@@ -145,6 +151,9 @@ func JellyfinReporter(baseURL string) Reporter {
 		switch {
 		case p.Status == Stopped:
 			endpoint = "/Sessions/Playing/Stopped"
+			// Even if the stop doesn't get there: the hub keeps no token of a device it no longer
+			// reports for (SPEC.md, section 10), and the next track then starts afresh.
+			delete(playing, token)
 		case starts(p) && !now.counted:
 			endpoint, now.counted = "/Sessions/Playing", true
 		}
@@ -187,9 +196,7 @@ func JellyfinReporter(baseURL string) Reporter {
 			return fmt.Errorf("%s: HTTP %d", endpoint, res.StatusCode)
 		}
 
-		if p.Status == Stopped {
-			delete(playing, token)
-		} else {
+		if p.Status != Stopped {
 			playing[token] = now
 		}
 

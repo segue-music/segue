@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -217,6 +219,67 @@ func (d *testDevice) report(state map[string]any) {
 	d.send(map[string]any{"type": "state", "state": state})
 }
 
+// fakeConn is a connection without a WebSocket, for tests that drive a Session themselves. It keeps
+// what the hub sends it.
+type fakeConn struct {
+	mu     sync.Mutex
+	sent   []any
+	closed int // the close code, once the hub closes it
+}
+
+func (c *fakeConn) Send(msg any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.sent = append(c.sent, msg)
+}
+
+func (c *fakeConn) Close(code int, _ string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.closed = code
+}
+
+func (c *fakeConn) closeCode() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.closed
+}
+
+// gone lists the devices the hub said were gone.
+func (c *fakeConn) gone() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var ids []string
+
+	for _, msg := range c.sent {
+		if gone, ok := msg.(goneMsg); ok {
+			ids = append(ids, gone.DeviceID)
+		}
+	}
+
+	return ids
+}
+
+// signIn opens a session on conn, and says hello in it as alice's device.
+func signIn(t *testing.T, h *Hub, conn Conn, device DeviceInfo) *Session {
+	t.Helper()
+
+	hello, err := json.Marshal(map[string]any{"type": "hello", "protocol": ProtocolVersion, "auth": as("alice"), "device": device})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := h.Open(conn)
+
+	s.Message(context.Background(), hello)
+
+	return s
+}
+
 var songs = []map[string]any{
 	{"id": "c032d12530e3c18d843d13651f9689ac", "title": "Dream On", "durationMs": 268000},
 	{"id": "ffffffffffffffffffffffffffffffff", "title": "Other", "durationMs": 200000},
@@ -267,14 +330,44 @@ func TestFirstMessageMustBeAValidHello(t *testing.T) {
 	}
 }
 
-func TestUnknownCapabilitiesAreDropped(t *testing.T) {
+func TestAHelloAfterItsTimeIsTurnedAway(t *testing.T) {
+	h := New(Options{Authenticate: byUsername, HelloTimeout: time.Millisecond})
+	conn := &fakeConn{}
+	s := h.Open(conn)
+	deadline := time.Now().Add(2 * time.Second)
+
+	for conn.closeCode() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+
+	if code := conn.closeCode(); code != CloseBadHello {
+		t.Fatalf("close code %d, want %d", code, CloseBadHello)
+	}
+
+	// The hello that comes as the connection closes: the device, told not to reconnect, isn't
+	// listed as online.
+	hello, _ := json.Marshal(map[string]any{"type": "hello", "protocol": ProtocolVersion, "auth": as("alice"), "device": info("phone", Subsonic, player)})
+
+	s.Message(context.Background(), hello)
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if len(h.users) != 0 {
+		t.Fatalf("the late hello signed in %v", h.users)
+	}
+}
+
+func TestUnknownRolesAndCapabilitiesAreDropped(t *testing.T) {
 	url, _ := startHub(t, Options{})
 	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
 
-	join(t, url, as("alice"), info("tv", Subsonic, player, ActPlay, "dance"))
+	// A newer app connects, as what this hub knows of it.
+	join(t, url, as("alice"), info("tv", Subsonic, []Role{RolePlayer, "observer"}, ActPlay, "dance"))
 
-	if d := pc.expectDevice("tv", func(d Device) bool { return d.Online }); !slices.Equal(d.Capabilities, []Action{ActPlay}) {
-		t.Fatalf("capabilities %v", d.Capabilities)
+	d := pc.expectDevice("tv", func(d Device) bool { return d.Online })
+	if !slices.Equal(d.Roles, []Role{RolePlayer}) || !slices.Equal(d.Capabilities, []Action{ActPlay}) {
+		t.Fatalf("roles %v, capabilities %v", d.Roles, d.Capabilities)
 	}
 }
 
@@ -580,6 +673,24 @@ func TestTransfer(t *testing.T) {
 
 	if r := pc.expect("result"); r.Error != "nothingToTransfer" {
 		t.Fatalf("result %+v", r)
+	}
+}
+
+func TestATransferCarriesAnOrderOnlyWhenShuffled(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
+	// Shuffle off, without the queue again that SPEC.md asks for: the phone's state keeps its order.
+	phone.report(map[string]any{"status": "playing", "positionMs": 0, "queue": songs, "shuffle": true, "order": []int{1, 0}})
+	phone.report(map[string]any{"status": "playing", "positionMs": 0, "shuffle": false})
+	pc.expect("state")
+	pc.expect("state")
+	pc.send(map[string]any{"type": "transfer", "id": "t", "from": "phone", "to": "tv"})
+
+	if got := tv.obey(""); got.Shuffle == nil || *got.Shuffle || got.Order != nil {
+		t.Fatalf("the TV got shuffle %v, order %v", got.Shuffle, got.Order)
 	}
 }
 
@@ -909,6 +1020,25 @@ quiet:
 	}
 }
 
+func TestSigningInThroughTheOtherAPI(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
+	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
+	phone.report(map[string]any{"status": "paused", "positionMs": 0, "queue": songs})
+	pc.expect("state")
+	_ = phone.ws.Close()
+	pc.expectDevice("phone", func(d Device) bool { return !d.Online })
+
+	// The same app, signed in through the Subsonic API: its queue, in Jellyfin's ids, is translated.
+	join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+
+	d := pc.expectDevice("phone", func(d Device) bool { return d.Online })
+	if d.State == nil || d.State.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" {
+		t.Fatalf("the phone's state %+v", d.State)
+	}
+}
+
 func TestCommandTimeoutAndDisconnect(t *testing.T) {
 	url, _ := startHub(t, Options{CommandTimeout: 100 * time.Millisecond})
 	stuck, _ := join(t, url, as("alice"), info("stuck", Subsonic, player, everything...))
@@ -930,6 +1060,24 @@ func TestCommandTimeoutAndDisconnect(t *testing.T) {
 	_ = stuck.ws.Close()
 
 	if r := pc.expect("result"); r.Error != "offline" {
+		t.Fatalf("result %+v", r)
+	}
+}
+
+func TestAPlayerThatDoesntAnswerGetsNoMoreCommands(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	stuck, _ := join(t, url, as("alice"), info("stuck", Subsonic, player, everything...))
+	pc, _ := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
+	for i := range maxWaiting {
+		pc.send(map[string]any{"type": "command", "id": fmt.Sprint(i), "target": "stuck", "command": map[string]any{"action": "play"}})
+		stuck.expect("command")
+	}
+
+	// It has answered none of those: another one fails at once, rather than wait for the timeout.
+	pc.send(map[string]any{"type": "command", "id": "more", "target": "stuck", "command": map[string]any{"action": "play"}})
+
+	if r := pc.expect("result"); r.Re != "more" || r.Error != "timeout" {
 		t.Fatalf("result %+v", r)
 	}
 }
@@ -999,6 +1147,37 @@ func TestSweepForgetsOldOfflineDevices(t *testing.T) {
 	}
 }
 
+func TestADeviceTooManyForgetsTheOldestOffline(t *testing.T) {
+	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
+	h := New(Options{Authenticate: byUsername, Now: c.Now})
+	pc := &fakeConn{}
+
+	signIn(t, h, pc, info("pc", Subsonic, controller))
+
+	// A client that signs in under a new id each time.
+	for i := range maxDevices - 1 {
+		c.advance(time.Second)
+		signIn(t, h, &fakeConn{}, info(fmt.Sprint("phone", i), Subsonic, player)).Closed()
+	}
+
+	if gone := pc.gone(); gone != nil {
+		t.Fatalf("forgot %v, under %d devices", gone, maxDevices)
+	}
+
+	signIn(t, h, &fakeConn{}, info("tv", Subsonic, player))
+
+	if gone := pc.gone(); !slices.Equal(gone, []string{"phone0"}) {
+		t.Fatalf("forgot %v", gone)
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if n := len(h.users["alice"]); n != maxDevices {
+		t.Fatalf("%d devices", n)
+	}
+}
+
 func TestInfoEndpoint(t *testing.T) {
 	h := New(Options{Authenticate: byUsername})
 
@@ -1015,6 +1194,20 @@ func TestInfoEndpoint(t *testing.T) {
 		if origin := w.Header().Get("Access-Control-Allow-Origin"); origin != "*" {
 			t.Errorf("%s: Access-Control-Allow-Origin %q", path, origin)
 		}
+
+		// Even with headers of its own, which a browser asks about first.
+		preflight := httptest.NewRequest("OPTIONS", path, nil)
+		preflight.Header.Set("Origin", "https://player.example")
+		preflight.Header.Set("Access-Control-Request-Method", "GET")
+		preflight.Header.Set("Access-Control-Request-Headers", "authorization")
+		w = httptest.NewRecorder()
+
+		h.Handler(nil).ServeHTTP(w, preflight)
+
+		if w.Code != http.StatusNoContent || w.Header().Get("Access-Control-Allow-Origin") != "*" ||
+			w.Header().Get("Access-Control-Allow-Headers") != "authorization" {
+			t.Errorf("%s: preflight %d %v", path, w.Code, w.Header())
+		}
 	}
 
 	w := httptest.NewRecorder()
@@ -1023,6 +1216,55 @@ func TestInfoEndpoint(t *testing.T) {
 
 	if w.Code != 404 {
 		t.Errorf("/connectx/v1/info: %d", w.Code)
+	}
+}
+
+func TestAllowOrigin(t *testing.T) {
+	url, h := startHub(t, Options{AllowOrigin: func(origin string) bool { return origin == "https://player.example" }})
+	hubOrigin := "http" + strings.TrimSuffix(strings.TrimPrefix(url, "ws"), "/v1/ws")
+
+	for _, tc := range []struct {
+		origin string
+		ok     bool
+	}{
+		{"", true}, // an app outside a browser
+		{hubOrigin, true},
+		{"https://player.example", true},
+		{"https://elsewhere.example", false},
+	} {
+		header := http.Header{}
+
+		if tc.origin != "" {
+			header.Set("Origin", tc.origin)
+		}
+
+		ws, res, err := websocket.DefaultDialer.Dial(url, header)
+		if (err == nil) != tc.ok {
+			t.Errorf("origin %q: connected %v, want %v", tc.origin, err == nil, tc.ok)
+		}
+
+		if err == nil {
+			_ = ws.Close()
+		} else if res != nil && res.StatusCode != http.StatusForbidden {
+			t.Errorf("origin %q: HTTP %d", tc.origin, res.StatusCode)
+		}
+
+		r := httptest.NewRequest("GET", hubOrigin+"/v1/info", nil)
+		r.Header = header
+		w := httptest.NewRecorder()
+
+		h.Handler(nil).ServeHTTP(w, r)
+
+		// Only an allowed page reads it, by its origin.
+		want := ""
+
+		if tc.ok {
+			want = tc.origin
+		}
+
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != want {
+			t.Errorf("origin %q: Access-Control-Allow-Origin %q, want %q", tc.origin, got, want)
+		}
 	}
 }
 
@@ -1045,8 +1287,8 @@ func TestRoutes(t *testing.T) {
 	}{
 		{"HEAD", "/v1/info", 200, ""},
 		{"HEAD", "/connect/v1/info", 200, ""},
-		{"POST", "/v1/info", 405, "GET, HEAD"},
-		{"POST", "/connect/v1/info", 405, "GET, HEAD"},
+		{"POST", "/v1/info", 405, "GET, HEAD, OPTIONS"},
+		{"POST", "/connect/v1/info", 405, "GET, HEAD, OPTIONS"},
 		{"GET", "/v1/other", 404, ""},
 		{"GET", "/connect/connect/v1/info", 404, ""}, // the prefix is taken off once
 		{"GET", "/", 404, ""},

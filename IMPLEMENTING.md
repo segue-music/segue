@@ -29,6 +29,9 @@ about 850 lines of Dart (`lib/segue/`), plus 550 for the behaviour in [section 7
   `B`'s origin if `B` has a path. A hub answers `200` with `"protocol": "segue"` and a `versions`
   list that has `1`. Its WebSocket is `connect/v1/ws` next to it, `wss://` for `https://`.
 - Probe once per sign-in, with a short timeout (the reference app gives each URL 3 s).
+- In a browser, probe without credentials, as `fetch` does by default for another origin: the hub
+  allows any origin with `Access-Control-Allow-Origin: *`, which a browser doesn't accept for a
+  request with `credentials: "include"` or `withCredentials`.
 - Let the user type a hub URL instead, for servers whose proxy doesn't route `/connect/`.
 - No hub: the app works as it did. Segue is an addition, never a requirement.
 

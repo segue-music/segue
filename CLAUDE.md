@@ -83,7 +83,9 @@ The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binar
   lacks it; `JellyfinReporter` uses Jellyfin's sessions, signed as the device, and counts a play
   (`Sessions/Playing`) only for a track that starts from its start.
 - `Handler` serves `/v1/info` and `/v1/ws` both at the root and under `/connect/`, whether or not
-  the reverse proxy strips the prefix.
+  the reverse proxy strips the prefix. Pages in a browser reach both from any origin, unless
+  `Options.AllowOrigin` says otherwise: with `SEGUE_AUTH=none`, `cmd/segue-hub` allows only pages
+  served from the same machine.
 - Hub tests (`hub_test.go`) drive real WebSocket connections against `httptest` servers.
 
 ## Conventions

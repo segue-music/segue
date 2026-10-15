@@ -54,18 +54,22 @@ func (h *Hub) releaseLastPlayback(e *entry) {
 }
 
 // saveLast hands the last playbacks to the store, if there is one. Call with h.mu held.
+//
+// It hands a copy, which the store encodes outside the lock, as encoding every user's queue would
+// hold up the hub on each report. The copy shares the queues and the fields behind pointers, which
+// a report replaces and never changes in place.
 func (h *Hub) saveLast() {
 	if h.store == nil {
 		return
 	}
 
-	data, err := json.Marshal(h.last)
-	if err != nil {
-		h.log.Error("can't encode the last playbacks", "err", err)
-		return
+	last := make(map[string]lastPlayback, len(h.last))
+
+	for user, l := range h.last {
+		last[user] = *l
 	}
 
-	h.store.save(data)
+	h.store.save(last)
 }
 
 // store writes the last playbacks to a JSON file in the background, so the hub never waits on the
@@ -74,7 +78,7 @@ type store struct {
 	path    string
 	log     *slog.Logger
 	mu      sync.Mutex
-	pending []byte
+	pending map[string]lastPlayback // nil: nothing to write
 	wake    chan struct{}
 	done    chan struct{}
 	stopped chan struct{}
@@ -107,9 +111,9 @@ func openStore(path string, log *slog.Logger) (*store, map[string]*lastPlayback)
 	return s, last
 }
 
-func (s *store) save(data []byte) {
+func (s *store) save(last map[string]lastPlayback) {
 	s.mu.Lock()
-	s.pending = data
+	s.pending = last
 	s.mu.Unlock()
 
 	select {
@@ -135,11 +139,17 @@ func (s *store) run() {
 func (s *store) flush() {
 	s.mu.Lock()
 
-	data := s.pending
+	last := s.pending
 	s.pending = nil
 	s.mu.Unlock()
 
-	if data == nil {
+	if last == nil {
+		return
+	}
+
+	data, err := json.Marshal(last)
+	if err != nil {
+		s.log.Error("can't encode the last playbacks", "err", err)
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -192,6 +193,29 @@ func TestTheHubShuttingDownReportsNoStop(t *testing.T) {
 	// where the media server counts it as it stops.
 	tv.expectClose()
 	noReport(t, reported)
+}
+
+func TestNoCredentialsAreKeptOfADeviceGone(t *testing.T) {
+	report, reported := reportsTo()
+	hubURL, h := startHub(t, Options{Report: report})
+	tv, _ := join(t, hubURL, as("alice"), info("tv", Subsonic, player, everything...))
+	pc, _ := join(t, hubURL, as("alice"), info("pc", Subsonic, controller))
+
+	tv.report(map[string]any{"status": "playing", "positionMs": 1000, "index": 0, "queue": subsonicSongs})
+	nextReport(t, reported)
+	_ = tv.ws.Close()
+	pc.expectDevice("tv", func(d Device) bool { return !d.Online })
+
+	if p := nextReport(t, reported); p.Status != Stopped || p.Auth != as("alice") {
+		t.Fatalf("reported %+v", p)
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if e := h.users["alice"]["tv"]; e.auth != (Auth{}) || e.reported != nil {
+		t.Fatalf("kept %+v and %+v", e.auth, e.reported)
+	}
 }
 
 func TestClosingTwice(t *testing.T) {
@@ -395,6 +419,72 @@ func TestSubsonicReporterErrors(t *testing.T) {
 	}
 }
 
+func TestSubsonicReporterKeepsWhatItKnewWhenItCantAsk(t *testing.T) {
+	savedHold, savedRetry := extensionsHold, extensionsRetry
+	extensionsHold, extensionsRetry = 0, 0 // asks on every report
+
+	t.Cleanup(func() { extensionsHold, extensionsRetry = savedHold, savedRetry })
+
+	var down atomic.Bool
+
+	requests := make(chan string, 100)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		endpoint := strings.TrimSuffix(r.URL.Path, ".view")
+
+		requests <- endpoint
+
+		switch {
+		case endpoint != "/rest/getOpenSubsonicExtensions":
+			_, _ = w.Write([]byte(subsonicOK))
+		case down.Load():
+			w.WriteHeader(http.StatusBadGateway)
+		default:
+			_, _ = w.Write([]byte(`{"subsonic-response": {"status": "ok", "openSubsonicExtensions": [{"name": "playbackReport"}]}}`))
+		}
+	}))
+
+	t.Cleanup(server.Close)
+
+	report := SubsonicReporter(server.URL)
+	p := Playback{Auth: as("alice"), Device: "tv", ID: dreamOn, Status: Playing}
+
+	if err := report(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+
+	// The server restarting: the pause still goes through reportPlayback, rather than be dropped by
+	// scrobble's now playing.
+	down.Store(true)
+	p.Status = Paused
+
+	if err := report(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+
+	expectPaths(t, requests, "/rest/getOpenSubsonicExtensions", "/rest/reportPlayback", "/rest/getOpenSubsonicExtensions", "/rest/reportPlayback")
+}
+
+// expectPaths checks that the media server was asked for paths, in that order, and for nothing
+// else.
+func expectPaths(t *testing.T, requests chan string, paths ...string) {
+	t.Helper()
+
+	for _, path := range paths {
+		select {
+		case got := <-requests:
+			if got != path {
+				t.Fatalf("asked for %s, want %s", got, path)
+			}
+		default:
+			t.Fatalf("the media server wasn't asked for %s", path)
+		}
+	}
+
+	if len(requests) != 0 {
+		t.Fatalf("asked for %s too", <-requests)
+	}
+}
+
 // fakeJellyfin is a media server that answers the Jellyfin session reports, under prefix, to the
 // token "jf", and hands over each one.
 func fakeJellyfin(t *testing.T, prefix string) (string, chan jellyfinRequest) {
@@ -527,6 +617,49 @@ func TestJellyfinReporterErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "rejected") {
 		t.Fatalf("got %v", err)
 	}
+}
+
+func TestJellyfinReporterForgetsATrackWhoseStopFailed(t *testing.T) {
+	var down atomic.Bool
+
+	requests := make(chan string, 100)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.URL.Path
+
+		if down.Load() {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	t.Cleanup(server.Close)
+
+	report := JellyfinReporter(server.URL)
+	p := Playback{Auth: Auth{Scheme: "jellyfin", Token: "jf"}, Device: "tv", DeviceID: "tv", Client: "test", ID: dreamOn, Status: Playing}
+
+	if err := report(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+
+	down.Store(true)
+	p.Status = Stopped
+
+	if err := report(context.Background(), p); err == nil {
+		t.Fatal("a stop that failed went through")
+	}
+
+	// The hub keeps nothing of the device after its stop, even one that failed: played again from
+	// the start, the track is another play.
+	down.Store(false)
+	p.Status = Playing
+
+	if err := report(context.Background(), p); err != nil {
+		t.Fatal(err)
+	}
+
+	expectPaths(t, requests, "/Sessions/Playing", "/Sessions/Playing/Stopped", "/Sessions/Playing")
 }
 
 func TestUpstreamReporterUsesTheAPIOfTheCredentials(t *testing.T) {
