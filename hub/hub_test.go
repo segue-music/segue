@@ -887,6 +887,61 @@ func TestTransferWithoutASourceTakesTheLastPlayback(t *testing.T) {
 	}
 }
 
+// Moved paused, the music doesn't play at the destination, but the last playback goes with it all
+// the same, rather than stay with the source, idle and without a queue.
+func TestAPausedTransferHandsOverTheLastPlayback(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
+	phone.report(map[string]any{"status": "playing", "positionMs": 5000, "index": 1, "queue": songs})
+	phone.report(map[string]any{"status": "paused", "positionMs": 6000})
+
+	for tv.expect("state").State.Status != Paused {
+	}
+
+	phone.send(map[string]any{"type": "transfer", "id": "t", "from": "phone", "to": "tv", "play": false})
+	tv.obey("")
+
+	if stopped := phone.obey(""); stopped.Action != ActStop {
+		t.Fatalf("the phone got %+v", stopped)
+	}
+
+	phone.report(map[string]any{"status": "stopped", "positionMs": 0, "queue": []any{}})
+
+	if r := phone.expect("result"); !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+
+	// An app that opens shows it on the TV, where the music is, even before the TV reports.
+	pc, welcome := join(t, url, as("alice"), info("pc", Subsonic, controller))
+
+	last := welcome.LastPlayback
+	if last == nil || last.DeviceID != "tv" || last.State.Status != Paused || last.State.PositionMs != 6000 || *last.State.Index != 1 {
+		t.Fatalf("last playback %+v", last)
+	}
+
+	tv.report(map[string]any{"status": "paused", "positionMs": 6000, "index": 1, "queue": songs})
+
+	for pc.expect("state").DeviceID != "tv" {
+	}
+
+	// And "continue here" takes it from the TV, which it then leaves idle.
+	phone.send(map[string]any{"type": "transfer", "id": "t2", "to": "phone", "play": false})
+
+	if got := phone.obey(""); got.Action != ActSetQueue || *got.PositionMs != 6000 || *got.Index != 1 || *got.Play {
+		t.Fatalf("the phone got %+v", got)
+	}
+
+	if stopped := tv.obey(""); stopped.Action != ActStop {
+		t.Fatalf("the TV got %+v", stopped)
+	}
+
+	if r := phone.expect("result"); r.Re != "t2" || !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+}
+
 func TestTransferWithoutASourceAfterARestart(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	path := filepath.Join(t.TempDir(), "last.json")

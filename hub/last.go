@@ -13,16 +13,16 @@ import (
 // lastPlayback is a user's most recent playback (SPEC.md, "Last playback"): what the device that
 // played last had, kept across disconnects and, with a store, across restarts.
 type lastPlayback struct {
-	DeviceID   string       `json:"deviceId"` // empty once that device went offline, until one plays
+	DeviceID   string       `json:"deviceId"` // empty once that device went offline, until one takes it over
 	DeviceName string       `json:"deviceName"`
 	API        API          `json:"api"` // the id space of State.Queue
 	State      StampedState `json:"state"`
 }
 
 // noteLastPlayback updates the user's last playback after e reported. A device takes it over only
-// by playing: loading it, as an app that opens does, doesn't. The device that has it also updates
-// it while paused. A report without a queue (an app that just opened, empty) never touches it.
-// Call with h.mu held.
+// by playing, or as the destination of a transfer (takeLastPlayback): loading it, as an app that
+// opens does, doesn't. The device that has it also updates it while paused. A report without a
+// queue (an app that just opened, empty) never touches it. Call with h.mu held.
 func (h *Hub) noteLastPlayback(e *entry) {
 	state := e.state
 	if state == nil || len(state.Queue) == 0 {
@@ -38,10 +38,34 @@ func (h *Hub) noteLastPlayback(e *entry) {
 	h.saveLast()
 }
 
+// takeLastPlayback gives the user's last playback to e, the device a transfer has just moved the
+// music to with handoff, a setQueue whose queue has api's ids (SPEC.md, sections 6 and 7). It does
+// so whether the music plays there or not: moved paused, it would otherwise stay with the source,
+// which the transfer leaves idle. Until e reports, it is the music as handed over. Call with h.mu
+// held.
+func (h *Hub) takeLastPlayback(e *entry, handoff Command, api API) {
+	status := Paused
+
+	if *handoff.Play {
+		status = Playing
+	}
+
+	state := PlayerState{
+		Status: status, PositionMs: *handoff.PositionMs, Queue: handoff.Queue, Index: handoff.Index,
+		Repeat: handoff.Repeat, Shuffle: handoff.Shuffle, Order: handoff.Order,
+	}
+
+	h.last[e.user] = &lastPlayback{
+		DeviceID: e.info.ID, DeviceName: e.info.Name, API: api,
+		State: StampedState{PlayerState: state, At: h.opts.Now().UnixMilli()},
+	}
+	h.saveLast()
+}
+
 // releaseLastPlayback lets go of the last playback when the device that holds it goes offline
 // (SPEC.md, section 7): its clock stops where playback had got to, and no device holds it until one
-// plays. An app that opens then shows it on its own, not on that device, even once it is back.
-// Call with h.mu held.
+// plays or a transfer moves it. An app that opens then shows it on its own, not on that device,
+// even once it is back. Call with h.mu held.
 func (h *Hub) releaseLastPlayback(e *entry) {
 	last := h.last[e.user]
 	if last == nil || last.DeviceID != e.info.ID {

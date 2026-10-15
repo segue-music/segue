@@ -602,7 +602,8 @@ func (h *Hub) onCommand(e *entry, conn Conn, msg incoming) {
 }
 
 // onTransfer hands the source's queue, at its current position and in its modes, to the
-// destination, then stops the source. Without a source, it is the user's last playback.
+// destination, which takes over the user's last playback, then stops the source. Without a source,
+// it is the user's last playback.
 func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	if msg.ID == "" {
 		conn.Send(errorMsg{Type: "error", Error: codeBadMessage})
@@ -688,13 +689,14 @@ func (h *Hub) onTransfer(e *entry, conn Conn, msg incoming) {
 	}
 
 	o := h.request(destination, handoff, sourceAPI, from)
-	if o.ok && source != nil && source != destination {
+	if o.ok && handoff.Action == ActSetQueue {
 		h.mu.Lock()
+		h.takeLastPlayback(destination, handoff, sourceAPI)
 
 		var command Command
 		var ok bool
 
-		if source.conn != nil && source.state != nil && len(source.state.Queue) > 0 {
+		if source != nil && source.conn != nil && source.state != nil && len(source.state.Queue) > 0 {
 			command, ok = leave(source)
 		}
 

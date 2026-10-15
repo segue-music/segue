@@ -282,9 +282,10 @@ The hub:
    [section 8](#8-ids-across-apis)), and its `repeat`, `shuffle` and `order`, so that the music goes
    on as it played: repeating as it did, shuffled in the same order, which shuffle going off takes
    back on the destination too;
-3. if that worked and the source is online, sends it a `stop` (a `pause`, if it plays and takes no
-   `stop`), so that it is left idle, not paused with music that now plays elsewhere (best effort:
-   the music has already moved);
+3. if that worked, gives the destination the user's last playback
+   ([section 7](#7-last-playback)), whether the music plays there or not, and, if the source is
+   online, sends it a `stop` (a `pause`, if it plays and takes no `stop`), so that it is left idle,
+   not paused with music that is now elsewhere (best effort: the music has already moved);
 4. answers the request with the destination's result, or `nothingToTransfer` when the source has
    no queue.
 
@@ -305,12 +306,13 @@ The hub keeps, for each user, the **last playback**: the state of the device tha
 that an app opened after every app was closed can show where the music was. It is the hub's own
 record, separate from the devices' states:
 
-- a device takes it over only by reporting `playing` with a queue; the device that holds it also
-  updates it while paused (a seek, say);
+- a device takes it over only by reporting `playing` with a queue, or as the destination of a
+  transfer ([section 6](#6-transfer)), even one that leaves it paused, as the music is there now;
+  the device that holds it also updates it while paused (a seek, say);
 - a report without a queue never touches it: an app that has just opened, empty, does not wipe it;
 - when the device that holds it goes offline, it lets go of it: its clock stops (the position
   becomes where playback had got to, and the status `paused`), and no device holds it until one
-  plays. Coming back online doesn't give it back;
+  plays or a transfer moves it. Coming back online doesn't give it back;
 - the reference hub can keep it on disk, so that it survives a restart. A restart disconnects every
   device, so after one no device holds it, and its clock has stopped where the last report put it,
   since the hub can't tell how long it played on.
@@ -326,9 +328,9 @@ device that holds it, empty when none does; `deviceName` says where it was playe
 An app that opens with nothing playing anywhere shows it: on the device that holds it, if one does
 (it is then online, and the app controls it); otherwise here, loaded paused at the same point, in
 the same modes (`repeat`, `shuffle` and its `order`), so that play continues it here. Loading it
-doesn't take it over: until some device plays, every app that opens shows it the same way, on its
-own. A controller can also send it to any player, with a `transfer` without `from`
-([section 6](#6-transfer)).
+doesn't take it over: until some device plays, or a transfer moves it, every app that opens shows
+it the same way, on its own. A controller can also send it to any player, with a `transfer`
+without `from` ([section 6](#6-transfer)).
 
 ## 8. Ids across APIs
 
