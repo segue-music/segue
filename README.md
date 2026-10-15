@@ -20,7 +20,7 @@
 </p>
 
 > [!NOTE]
-> **Vibe-coded.** The spec, the hub and the app were written by Claude (through Claude Code), with
+> **Vibe-coded.** The spec and the hub were written by Claude (through Claude Code), with
 > a person deciding what to build and trying it on real devices. Every commit says so.
 
 ---
@@ -33,31 +33,19 @@ and the messages are in [SPEC.md](SPEC.md).
 
 **Status: early.** The protocol is a first draft. The hub works in its tests and with the first
 client, an app of its own ([segue-app](https://github.com/segue-music/segue-app)); both have run
-next to a real Navidrome since 2026-10-03. The app is in no store yet: its builds for Android,
-Linux and Windows are in its
-[latest release](https://github.com/segue-music/segue-app/releases/latest), 0.3.0, and its iOS
-build reaches only TestFlight's internal group. The app's 0.3.0 wants the hub's image from
-`sha-a23d565` on (`latest` is): with one before, a play on a device out of reach fails only after
-the hub's 10 s, rather than in about 5, and its music comes to the app only once the hub drops the
-device, up to a minute later.
+next to a real Navidrome since 2026-10-03.
 
 ## Layout
 
 | Folder | What |
 |---|---|
 | `SPEC.md` | The protocol |
-| `IMPLEMENTING.md` | The app's side of it, in the order an app developer builds it |
+| `IMPLEMENTING.md` | An app's side of it, in the order an app developer builds it |
 | `hub/` | The reference hub, in Go. Package `hub` (usable as a library), binary in `cmd/segue-hub` |
 
 The hub is in Go, the language of Navidrome, so that it can move into a media server. It also
 uses the same WebSocket library as Navidrome (`gorilla/websocket`). As a separate service it is
 one static binary: an 11 MB image, using about 2 MB of RAM when idle.
-
-The app, a music player for Navidrome, other OpenSubsonic servers and Jellyfin in Flutter
-(Linux, Windows, macOS, Android, iOS), is in its own repository,
-[segue-music/segue-app](https://github.com/segue-music/segue-app), with its side of the
-protocol in Dart (`lib/segue/`). A client in another language follows `SPEC.md`, and
-[IMPLEMENTING.md](IMPLEMENTING.md) walks through it.
 
 ## Hub
 
@@ -142,8 +130,8 @@ image from this repository.
    ([#5154](https://github.com/navidrome/navidrome/discussions/5154#discussioncomment-18927485)),
    whose maintainer plans this in Navidrome's own API, and to OpenSubsonic's app and server
    developers ([#283](https://github.com/opensubsonic/open-subsonic-api/discussions/283)).
-4. Internet radios (Navidrome's `getInternetRadioStations`), in the app and in the protocol, so that
-   a station moves between devices as a queue does: a queue item of `"kind": "radio"`, alone in its
+4. Internet radios (Navidrome's `getInternetRadioStations`) in the protocol, so that a station
+   moves between devices as a queue does: a queue item of `"kind": "radio"`, alone in its
    queue, with the station's `streamUrl` (Navidrome's Jellyfin API has no radios, so the id can't be
    translated) and what it plays now (ICY `StreamTitle`). It has no position, so no `seek`, `next`
    or `previous`; a `playsRadio` in the `hello` keeps it from apps that can't play it; the hub
