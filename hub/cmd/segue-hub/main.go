@@ -1,5 +1,5 @@
 // Command segue-hub runs the Segue hub next to a media server, configured by environment variables
-// (see README.md, "Hub").
+// (see README.md, "Configuration").
 package main
 
 import (

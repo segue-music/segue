@@ -215,7 +215,7 @@ for a track it hears of halfway, which shows it without counting.
 ## 10. Try it
 
 A hub with `SEGUE_AUTH=none` needs no media server, and accepts any device as the Subsonic user it
-names. Build it as in the [README](README.md#hub) and run:
+names. Build it as in the [README](README.md#from-source) and run:
 
 ```sh
 SEGUE_AUTH=none ./segue-hub
