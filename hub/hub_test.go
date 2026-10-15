@@ -1010,6 +1010,11 @@ func TestInfoEndpoint(t *testing.T) {
 		if w.Code != 200 || w.Body.String() != `{"protocol":"segue","server":"navidrome","versions":[1]}` {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body)
 		}
+
+		// A web player on another origin reads it too.
+		if origin := w.Header().Get("Access-Control-Allow-Origin"); origin != "*" {
+			t.Errorf("%s: Access-Control-Allow-Origin %q", path, origin)
+		}
 	}
 
 	w := httptest.NewRecorder()

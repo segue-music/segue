@@ -69,9 +69,11 @@ A client knows its media server's base URL, `B` (say `https://music.example.org`
 2. if `B` has a path, at `/connect/v1/info` on the origin of `B`.
 
 A `200` with `{"protocol": "segue", "versions": [1], ...}` means a hub is there, with its
-WebSocket at `.../connect/v1/ws`. The server's admin publishes the hub by routing `/connect/` on
-the media server's origin to it. Clients should also accept a hub URL typed by the user, and probe
-once per sign-in, not on every request.
+WebSocket at `.../connect/v1/ws`. The hub answers it with `Access-Control-Allow-Origin: *` and takes
+the WebSocket from any origin, so that apps in a browser, served from another origin, find it too.
+The server's admin publishes the hub by routing `/connect/` on the media server's origin to it.
+Clients should also accept a hub URL typed by the user, and probe once per sign-in, not on every
+request.
 
 A server that implements the hub itself ([section 13](#13-inside-a-media-server)) answers at the same
 place, and could also advertise it, for instance as an OpenSubsonic extension in

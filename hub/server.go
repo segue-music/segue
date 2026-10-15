@@ -45,6 +45,8 @@ func (h *Hub) Handler(info map[string]any) http.Handler {
 	}
 
 	serveInfo := func(w http.ResponseWriter, _ *http.Request) {
+		// Web players on other origins find the hub too: what it says is public (SPEC.md, section 1).
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(infoJSON)
 	}
