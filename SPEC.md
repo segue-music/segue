@@ -271,6 +271,10 @@ is the player's own text.
 { "type": "transfer", "id": "r2", "from": "<source>", "to": "<destination>", "play": true }
 ```
 
+`play` is whether the music plays at the destination, `true` when left out. Clients should send
+`false` when the source is paused, so that the music moves as it is, rather than start where it
+arrives.
+
 The hub:
 
 1. takes the source's last state and works out its position now;
