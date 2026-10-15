@@ -35,8 +35,11 @@ and the messages are in [SPEC.md](SPEC.md).
 client, an app of its own ([segue-app](https://github.com/segue-music/segue-app)); both have run
 next to a real Navidrome since 2026-10-03. The app is in no store yet: its builds for Android,
 Linux and Windows are in its
-[latest release](https://github.com/segue-music/segue-app/releases/latest), and its iOS build
-reaches only TestFlight's internal group.
+[latest release](https://github.com/segue-music/segue-app/releases/latest), 0.3.0, and its iOS
+build reaches only TestFlight's internal group. The app's 0.3.0 wants the hub's image from
+`sha-a23d565` on (`latest` is): with one before, a play on a device out of reach fails only after
+the hub's 10 s, rather than in about 5, and its music comes to the app only once the hub drops the
+device, up to a minute later.
 
 ## Layout
 
