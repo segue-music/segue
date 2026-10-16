@@ -183,7 +183,7 @@ func MediaServerAuthenticator(kind MediaServerKind, baseURL string, cacheFor tim
 		}
 
 		if auth.Scheme == SchemeSubsonic {
-			return auth.Username, true, nil
+			return subsonicUserName(ctx, client, base, auth), true, nil
 		}
 
 		return body.Response.TokenInfo.Username, body.Response.TokenInfo.Username != "", nil
@@ -231,6 +231,30 @@ func MediaServerAuthenticator(kind MediaServerKind, baseURL string, cacheFor tim
 
 		return user, ok, err
 	}
+}
+
+// subsonicUserName is the name of the user whose Subsonic credentials ping took, as the media server
+// keeps it. Navidrome takes the name in any case, so the one the device typed may differ in case
+// from the one its Jellyfin API gives. Where getUser doesn't answer with it, the typed name does:
+// the hub groups devices ignoring case, so only the name shown differs.
+func subsonicUserName(ctx context.Context, client *http.Client, base string, auth Auth) string {
+	query := subsonicQuery(auth, clientName)
+	query.Set("username", auth.Username)
+
+	var body struct {
+		Response struct {
+			User struct {
+				Username string `json:"username"`
+			} `json:"user"`
+		} `json:"subsonic-response"`
+	}
+
+	found, _ := getJSON(ctx, client, base+"/rest/getUser.view?"+query.Encode(), nil, &body)
+	if name := body.Response.User.Username; found && strings.EqualFold(name, auth.Username) {
+		return name
+	}
+
+	return auth.Username
 }
 
 // subsonicQuery is the query of a Subsonic API call made with auth (subsonic or apiKey) by client.

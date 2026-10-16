@@ -26,15 +26,26 @@ func fakeMediaServer(t *testing.T) (string, *atomic.Int32) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"subsonic-response": body})
 		}
 
+		// As in Navidrome, the user name goes in any case. getUser fails for erin, as on a server
+		// without it.
+		user := strings.ToLower(q.Get("u"))
+		good := (user == "alice" || user == "erin") && q.Get("t") == "good" && q.Get("c") == clientName
+
 		switch r.URL.Path {
 		case "/rest/ping.view":
 			switch {
-			case q.Get("u") == "":
+			case user == "":
 				subsonic(map[string]any{"status": "failed", "error": map[string]any{"code": 10}})
-			case q.Get("u") == "alice" && q.Get("t") == "good" && q.Get("c") == clientName:
+			case good:
 				subsonic(map[string]any{"status": "ok"})
 			default:
 				subsonic(map[string]any{"status": "failed", "error": map[string]any{"code": 40}})
+			}
+		case "/rest/getUser.view":
+			if good && user == "alice" && strings.EqualFold(q.Get("username"), user) {
+				subsonic(map[string]any{"status": "ok", "user": map[string]any{"username": "alice"}})
+			} else {
+				subsonic(map[string]any{"status": "failed", "error": map[string]any{"code": 0}})
 			}
 		case "/rest/tokenInfo.view":
 			if q.Get("apiKey") == "key" {
@@ -68,7 +79,9 @@ func TestMediaServerAuthenticator(t *testing.T) {
 		ok   bool
 	}{
 		{Auth{Scheme: "subsonic", Username: "alice", Token: "good", Salt: "s"}, "alice", true},
+		{Auth{Scheme: "subsonic", Username: "Alice", Token: "good", Salt: "s"}, "alice", true},
 		{Auth{Scheme: "subsonic", Username: "alice", Token: "bad", Salt: "s"}, "", false},
+		{Auth{Scheme: "subsonic", Username: "Erin", Token: "good", Salt: "s"}, "Erin", true},
 		{Auth{Scheme: "apiKey", APIKey: "key"}, "bob", true},
 		{Auth{Scheme: "apiKey", APIKey: "nope"}, "", false},
 		{Auth{Scheme: "jellyfin", Token: "jf"}, "carol", true},
@@ -87,12 +100,16 @@ func TestMediaServerAuthenticatorCaches(t *testing.T) {
 	auth := MediaServerAuthenticator(KindNavidrome, base, time.Minute)
 	good := Auth{Scheme: "subsonic", Username: "alice", Token: "good", Salt: "s"}
 
-	for range 3 {
+	_, _, _ = auth(context.Background(), good)
+
+	first := calls.Load()
+
+	for range 2 {
 		_, _, _ = auth(context.Background(), good)
 	}
 
-	if calls.Load() != 1 {
-		t.Fatalf("%d calls to the media server", calls.Load())
+	if calls.Load() != first {
+		t.Fatalf("%d calls to the media server, %d of them after the first check", calls.Load(), calls.Load()-first)
 	}
 }
 

@@ -110,7 +110,7 @@ belongs to:
 
 | `scheme` | Fields | The hub checks with |
 |---|---|---|
-| `subsonic` | `username`, `token`, `salt` | `GET /rest/ping` |
+| `subsonic` | `username`, `token`, `salt` | `GET /rest/ping`, then `GET /rest/getUser` for the name as the server keeps it |
 | `apiKey` | `apiKey` | `GET /rest/tokenInfo` (OpenSubsonic `apiKeyAuthentication`) |
 | `jellyfin` | `token` | `GET /Users/Me` |
 
@@ -143,7 +143,10 @@ The hub answers with `welcome`:
 ([section 4](#4-player-state-and-the-clock)).
 
 The hub groups devices by user name, ignoring case. On Navidrome both APIs have the same user names,
-so a Jellyfin app and a Subsonic app of the same person see each other.
+so a Jellyfin app and a Subsonic app of the same person see each other. Its Subsonic API takes the
+name in any case, which is why the hub asks `getUser` for it: `user` in `welcome` is the name as
+the server keeps it, the one its Jellyfin API gives, or the one the app sent where `getUser` doesn't
+answer.
 
 If the hub closes the connection, the code tells why:
 

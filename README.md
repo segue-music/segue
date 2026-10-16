@@ -53,8 +53,10 @@ Audio doesn't go through the hub: devices still play from the media server. How 
 [SPEC.md](SPEC.md).
 
 **Status: early.** The protocol is a first draft. The hub passes its tests and has run next to a
-real Navidrome since 2026-10-03. On Jellyfin, and on Navidrome's Jellyfin API, it has run only in
-its tests.
+real Navidrome since 2026-10-03, and next to a real Jellyfin since 2026-10-04. On Navidrome, a
+Subsonic device and a Jellyfin device of the same user see each other, share queues of real tracks,
+ids translated, and both show in its now playing; on Jellyfin, the hub's reports show in its
+sessions.
 
 ## Apps
 
@@ -175,13 +177,11 @@ library: its checks, id translation and reports are pluggable (`Authenticate`, `
 1. An observer that lists apps that don't speak the protocol (from `getNowPlaying`, leaving out what
    the hub reports itself), as devices that can be seen but not commanded. That covers apps like
    Symfonium, which is closed source.
-2. Run the hub against a real Jellyfin server and Navidrome's Jellyfin API: that Navidrome's two
-   APIs give the same user names, and that the ids translate on real items.
-3. Propose it to the open-source apps. It went to Navidrome as design input
+2. Propose it to the open-source apps. It went to Navidrome as design input
    ([#5154](https://github.com/navidrome/navidrome/discussions/5154#discussioncomment-18927485)),
    whose maintainer plans this in Navidrome's own API, and to OpenSubsonic's app and server
    developers ([#283](https://github.com/opensubsonic/open-subsonic-api/discussions/283)).
-4. Internet radios (Navidrome's `getInternetRadioStations`) in the protocol, so that a station
+3. Internet radios (Navidrome's `getInternetRadioStations`) in the protocol, so that a station
    moves between devices as a queue does: a queue item of `"kind": "radio"`, alone in its
    queue, with the station's `streamUrl` (Navidrome's Jellyfin API has no radios, so the id can't be
    translated) and what it plays now (ICY `StreamTitle`). It has no position, so no `seek`, `next`
