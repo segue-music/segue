@@ -56,10 +56,10 @@ The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binar
 ## Hub architecture
 
 - The core (`hub.go`) does not depend on the transport: a transport calls `Hub.Open(conn)` per
-  connection, then `Session.Message` for each text frame and `Session.Closed` at the end, all from
-  one goroutine. `server.go` is the gorilla/websocket transport. Its `wsConn` queues outgoing frames
-  for a writer goroutine, because `Conn.Send`/`Close` are called with the hub's lock held and must
-  never block.
+  connection, then `Session.Message` for each text frame and `Session.Closed` at the end, with the
+  error that ended the connection, for the log, all from one goroutine. `server.go` is the
+  gorilla/websocket transport. Its `wsConn` queues outgoing frames for a writer goroutine, because
+  `Conn.Send`/`Close` are called with the hub's lock held and must never block.
 - All hub state sits behind a single `h.mu`. Helpers marked "Call with h.mu held" assume it.
   Commands to players (`request`) wait for the answer outside the lock, matched by id through
   `pending`.

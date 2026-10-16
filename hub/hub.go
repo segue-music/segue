@@ -295,13 +295,13 @@ func (s *Session) Message(ctx context.Context, raw []byte) {
 	}
 }
 
-// Closed ends the session once the connection is gone. The device goes offline, unless a newer
-// connection of it took over.
-func (s *Session) Closed() {
+// Closed ends the session once the connection is gone, err saying why, for the log. The device
+// goes offline, unless a newer connection of it took over.
+func (s *Session) Closed(err error) {
 	s.helloTimer.Stop()
 
 	if s.entry != nil {
-		s.hub.disconnect(s.entry, s.conn)
+		s.hub.disconnect(s.entry, s.conn, err)
 	}
 }
 
@@ -438,7 +438,7 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 	return e
 }
 
-func (h *Hub) disconnect(e *entry, conn Conn) {
+func (h *Hub) disconnect(e *entry, conn Conn, err error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -470,7 +470,7 @@ func (h *Hub) disconnect(e *entry, conn Conn) {
 	e.auth, e.reported = Auth{}, nil
 	h.announce(e)
 	h.noteDrained()
-	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name)
+	h.log.Info("device disconnected", "user", e.user, "device", e.info.Name, "err", err)
 }
 
 // dispatch hands a message to its handler. Each one drops a late message from a connection that

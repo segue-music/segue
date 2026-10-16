@@ -2,6 +2,7 @@ package hub
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -129,7 +130,14 @@ func (h *Hub) serve(r *http.Request, ws *websocket.Conn) {
 	for {
 		kind, data, err := ws.ReadMessage()
 		if err != nil {
-			break
+			// Before the close, which fails a write under way, whose error would only say that the
+			// connection is closed.
+			why := c.end(err)
+
+			close(c.done)
+			_ = ws.Close()
+			session.Closed(why)
+			return
 		}
 
 		_ = ws.SetReadDeadline(time.Now().Add(pongWait))
@@ -138,10 +146,6 @@ func (h *Hub) serve(r *http.Request, ws *websocket.Conn) {
 			session.Message(r.Context(), data)
 		}
 	}
-
-	close(c.done)
-	_ = ws.Close()
-	session.Closed()
 }
 
 // wsConn is the Conn the hub sees: a queue drained by writeLoop, so the hub never blocks on a
@@ -151,6 +155,9 @@ type wsConn struct {
 	out      chan frame
 	done     chan struct{} // closed when the read side ends
 	dropOnce sync.Once
+
+	mu  sync.Mutex
+	err error // why the connection ended, from the read, a write or the hub, whichever came first
 }
 
 type frame struct {
@@ -185,8 +192,27 @@ func (c *wsConn) enqueue(f frame) {
 	case c.out <- f:
 	default:
 		// The device isn't reading: drop it rather than hold up the hub.
-		c.dropOnce.Do(func() { _ = c.ws.Close() })
+		c.dropOnce.Do(func() { c.drop(errors.New("hub: the device isn't reading")) })
 	}
+}
+
+// end keeps err as why the connection ended, unless it has a reason already, and returns the one
+// it keeps: once one side fails, the other only fails with the connection closed.
+func (c *wsConn) end(err error) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.err == nil {
+		c.err = err
+	}
+
+	return c.err
+}
+
+// drop closes the connection from the hub's side, err saying why.
+func (c *wsConn) drop(err error) {
+	c.end(err)
+	_ = c.ws.Close()
 }
 
 func (c *wsConn) writeLoop() {
@@ -202,7 +228,7 @@ func (c *wsConn) writeLoop() {
 				msg := websocket.FormatCloseMessage(f.closeCode, f.reason)
 				_ = c.ws.WriteControl(websocket.CloseMessage, msg, time.Now().Add(writeWait))
 				// The device answers with its own close frame, which ends the read loop.
-				time.AfterFunc(closeGrace, func() { _ = c.ws.Close() })
+				time.AfterFunc(closeGrace, func() { c.drop(errors.New("hub: no close frame back from the device")) })
 				return
 			}
 
@@ -211,8 +237,8 @@ func (c *wsConn) writeLoop() {
 				// handler puts pongWait back, and so does any message.
 				_ = c.ws.SetReadDeadline(time.Now().Add(probeWait))
 
-				if c.ws.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)) != nil {
-					_ = c.ws.Close()
+				if err := c.ws.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)); err != nil {
+					c.drop(err)
 					return
 				}
 
@@ -221,13 +247,13 @@ func (c *wsConn) writeLoop() {
 
 			_ = c.ws.SetWriteDeadline(time.Now().Add(writeWait))
 
-			if c.ws.WriteMessage(websocket.TextMessage, f.data) != nil {
-				_ = c.ws.Close()
+			if err := c.ws.WriteMessage(websocket.TextMessage, f.data); err != nil {
+				c.drop(err)
 				return
 			}
 		case <-ping.C:
-			if c.ws.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)) != nil {
-				_ = c.ws.Close()
+			if err := c.ws.WriteControl(websocket.PingMessage, nil, time.Now().Add(writeWait)); err != nil {
+				c.drop(err)
 				return
 			}
 		}

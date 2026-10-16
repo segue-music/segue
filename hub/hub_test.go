@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -262,6 +264,48 @@ func (c *fakeConn) gone() []string {
 	}
 
 	return ids
+}
+
+// logged is a slog.Handler that passes the hub's log on, for tests that read it. Its buffer must
+// hold all of it: the hub logs with its lock held.
+type logged chan slog.Record
+
+func (l logged) Enabled(context.Context, slog.Level) bool { return true }
+
+func (l logged) Handle(_ context.Context, r slog.Record) error {
+	l <- r.Clone()
+
+	return nil
+}
+
+func (l logged) WithAttrs([]slog.Attr) slog.Handler { return l }
+
+func (l logged) WithGroup(string) slog.Handler { return l }
+
+// expectDisconnect waits for the device's "device disconnected" and returns its err.
+func (l logged) expectDisconnect(t *testing.T, device string) string {
+	t.Helper()
+
+	timeout := time.After(2 * time.Second)
+
+	for {
+		select {
+		case r := <-l:
+			attrs := map[string]string{}
+
+			r.Attrs(func(a slog.Attr) bool {
+				attrs[a.Key] = a.Value.String()
+
+				return true
+			})
+
+			if r.Message == "device disconnected" && attrs["device"] == device {
+				return attrs["err"]
+			}
+		case <-timeout:
+			t.Fatalf("no disconnect of %s in the log", device)
+		}
+	}
 }
 
 // signIn opens a session on conn, and says hello in it as alice's device.
@@ -1222,6 +1266,33 @@ func TestAPlayerThatDoesntAnswerTheProbeGoesOffline(t *testing.T) {
 	}
 }
 
+func TestTheLogSaysWhyADeviceWentOffline(t *testing.T) {
+	logs := make(logged, 100)
+	url, _ := startHub(t, Options{Logger: slog.New(logs)})
+	phone, _ := join(t, url, as("alice"), info("phone", Subsonic, player))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player))
+	bye := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
+
+	if err := phone.ws.WriteControl(websocket.CloseMessage, bye, time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := logs.expectDisconnect(t, "phone"); !strings.Contains(err, "close 1000") {
+		t.Fatalf("the phone left with %q", err)
+	}
+
+	// Ended with nothing said, as when the system closes a suspended app's connection. Only its
+	// side, so that the hub reads an end rather than a reset, which a socket closed with messages
+	// unread may send.
+	if err := tv.ws.UnderlyingConn().(*net.TCPConn).CloseWrite(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := logs.expectDisconnect(t, "tv"); !strings.Contains(err, "unexpected EOF") {
+		t.Fatalf("the tv left with %q", err)
+	}
+}
+
 func TestSweepForgetsOldOfflineDevices(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	url, h := startHub(t, Options{Now: c.Now, OfflineTTL: time.Hour})
@@ -1250,7 +1321,7 @@ func TestADeviceTooManyForgetsTheOldestOffline(t *testing.T) {
 	// A client that signs in under a new id each time.
 	for i := range maxDevices - 1 {
 		c.advance(time.Second)
-		signIn(t, h, &fakeConn{}, info(fmt.Sprint("phone", i), Subsonic, player)).Closed()
+		signIn(t, h, &fakeConn{}, info(fmt.Sprint("phone", i), Subsonic, player)).Closed(nil)
 	}
 
 	if gone := pc.gone(); gone != nil {
