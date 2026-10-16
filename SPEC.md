@@ -325,12 +325,24 @@ device that holds it, empty when none does; `deviceName` says where it was playe
   "lastPlayback": { "deviceId": "...", "deviceName": "Living room TV", "state": { "status": "paused", "positionMs": 40000, "at": 1790000000000, "index": 1, "queue": [] } } }
 ```
 
+When another device holds it, or none does, the hub sends it, as `welcome` carries it, to the
+user's devices but the one that holds it: `{"type": "lastPlayback", "lastPlayback": {...}}`.
+Replace what you had. A transfer gives it to the destination before it stops the source, so the
+source hears of it first.
+
 An app that opens with nothing playing anywhere shows it: on the device that holds it, if one does
 (it is then online, and the app controls it); otherwise here, loaded paused at the same point, in
 the same modes (`repeat`, `shuffle` and its `order`), so that play continues it here. Loading it
 doesn't take it over: until some device plays, or a transfer moves it, every app that opens shows
 it the same way, on its own. A controller can also send it to any player, with a `transfer`
 without `from` ([section 6](#6-transfer)).
+
+An app that is open follows it too: when the music it shows goes (stopped here, or gone from the
+device it controls) and another device that is online holds the last playback, it shows that one,
+as an app that opened then would. That is where a transfer took the music, playing or paused,
+whichever device asked for it, while a device that starts playing is followed anyway
+([section 4](#4-player-state-and-the-clock)). Not when the device whose music went holds it itself,
+its queue over, nor when that device went offline.
 
 ## 8. Ids across APIs
 

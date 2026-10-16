@@ -438,6 +438,12 @@ type lastPlaybackMsg struct {
 	State      StampedState `json:"state"`
 }
 
+// lastPlaybackChangeMsg says that another device holds the user's last playback, or none does.
+type lastPlaybackChangeMsg struct {
+	Type         string           `json:"type"`
+	LastPlayback *lastPlaybackMsg `json:"lastPlayback"`
+}
+
 type deviceMsg struct {
 	Type   string `json:"type"`
 	Device Device `json:"device"`

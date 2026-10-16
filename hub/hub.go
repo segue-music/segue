@@ -428,10 +428,7 @@ func (h *Hub) hello(ctx context.Context, conn Conn, msg incoming) *entry {
 	}
 
 	if last := h.last[e.user]; last != nil {
-		welcome.LastPlayback = &lastPlaybackMsg{
-			DeviceID: last.DeviceID, DeviceName: last.DeviceName,
-			State: h.translateState(last.State, last.API, info.API),
-		}
+		welcome.LastPlayback = h.viewLastPlayback(last, info.API)
 	}
 
 	conn.Send(welcome)

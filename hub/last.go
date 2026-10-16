@@ -34,8 +34,7 @@ func (h *Hub) noteLastPlayback(e *entry) {
 		return
 	}
 
-	h.last[e.user] = &lastPlayback{DeviceID: e.info.ID, DeviceName: e.info.Name, API: e.info.API, State: *state}
-	h.saveLast()
+	h.setLastPlayback(e.user, &lastPlayback{DeviceID: e.info.ID, DeviceName: e.info.Name, API: e.info.API, State: *state})
 }
 
 // takeLastPlayback gives the user's last playback to e, the device a transfer has just moved the
@@ -55,11 +54,10 @@ func (h *Hub) takeLastPlayback(e *entry, handoff Command, api API) {
 		Repeat: handoff.Repeat, Shuffle: handoff.Shuffle, Order: handoff.Order,
 	}
 
-	h.last[e.user] = &lastPlayback{
+	h.setLastPlayback(e.user, &lastPlayback{
 		DeviceID: e.info.ID, DeviceName: e.info.Name, API: api,
 		State: StampedState{PlayerState: state, At: h.opts.Now().UnixMilli()},
-	}
-	h.saveLast()
+	})
 }
 
 // releaseLastPlayback lets go of the last playback when the device that holds it goes offline
@@ -75,6 +73,42 @@ func (h *Hub) releaseLastPlayback(e *entry) {
 	last.State.pause(h.opts.Now().UnixMilli())
 	last.DeviceID = ""
 	h.saveLast()
+	h.tellLastPlayback(e.user)
+}
+
+// setLastPlayback makes last the user's last playback, telling the user's devices when another
+// device holds it (tellLastPlayback). Call with h.mu held.
+func (h *Hub) setLastPlayback(user string, last *lastPlayback) {
+	moved := h.last[user] == nil || h.last[user].DeviceID != last.DeviceID
+
+	h.last[user] = last
+	h.saveLast()
+
+	if moved {
+		h.tellLastPlayback(user)
+	}
+}
+
+// tellLastPlayback sends the user's last playback, which another device holds now (or none does),
+// to the user's devices but that one (SPEC.md, section 7). An app whose music goes then follows
+// it: a transfer gives it to the destination before it stops the source, so the source hears of
+// it first. Call with h.mu held.
+func (h *Hub) tellLastPlayback(user string) {
+	last := h.last[user]
+
+	for _, to := range h.users[user] {
+		if to.conn != nil && to.info.ID != last.DeviceID {
+			to.conn.Send(lastPlaybackChangeMsg{Type: "lastPlayback", LastPlayback: h.viewLastPlayback(last, to.info.API)})
+		}
+	}
+}
+
+// viewLastPlayback is last as a device that speaks api receives it. Call with h.mu held.
+func (h *Hub) viewLastPlayback(last *lastPlayback, api API) *lastPlaybackMsg {
+	return &lastPlaybackMsg{
+		DeviceID: last.DeviceID, DeviceName: last.DeviceName,
+		State: h.translateState(last.State, last.API, api),
+	}
 }
 
 // saveLast hands the last playbacks to the store, if there is one. Call with h.mu held.

@@ -942,6 +942,44 @@ func TestAPausedTransferHandsOverTheLastPlayback(t *testing.T) {
 	}
 }
 
+// The user's other devices hear of it whenever another device holds the last playback, or none
+// does, with its queue in their API; the source of a transfer, before it is stopped.
+func TestTheLastPlaybackIsToldAsItMoves(t *testing.T) {
+	url, _ := startHub(t, Options{})
+	phone, _ := join(t, url, as("alice"), info("phone", Jellyfin, player, everything...))
+	tv, _ := join(t, url, as("alice"), info("tv", Subsonic, player, everything...))
+
+	phone.report(map[string]any{"status": "playing", "positionMs": 5000, "queue": songs})
+
+	if got := tv.expect("lastPlayback").LastPlayback; got == nil || got.DeviceID != "phone" || got.State.Queue[0].ID != "5QFKvMsJrd57QE2Le2dKKo" {
+		t.Fatalf("the TV heard %+v", got)
+	}
+
+	// Moved paused, from the TV: the phone hears that the TV has it, then is stopped.
+	phone.report(map[string]any{"status": "paused", "positionMs": 6000})
+	tv.send(map[string]any{"type": "transfer", "id": "t", "from": "phone", "to": "tv", "play": false})
+	tv.obey("")
+
+	if got := phone.expect("lastPlayback").LastPlayback; got == nil || got.DeviceID != "tv" || got.State.Status != Paused || got.State.Queue[0].ID != songs[0]["id"] {
+		t.Fatalf("the phone heard %+v", got)
+	}
+
+	if stopped := phone.obey(""); stopped.Action != ActStop {
+		t.Fatalf("the phone got %+v", stopped)
+	}
+
+	if r := tv.expect("result"); !r.OK {
+		t.Fatalf("result %+v", r)
+	}
+
+	// Gone offline, the TV lets go of it.
+	_ = tv.ws.Close()
+
+	if got := phone.expect("lastPlayback").LastPlayback; got == nil || got.DeviceID != "" || got.DeviceName != "tv" {
+		t.Fatalf("the phone heard %+v", got)
+	}
+}
+
 func TestTransferWithoutASourceAfterARestart(t *testing.T) {
 	c := &clock{now: time.UnixMilli(1_790_000_000_000)}
 	path := filepath.Join(t.TempDir(), "last.json")
