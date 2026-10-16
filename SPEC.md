@@ -405,9 +405,6 @@ how:
 The hub only routes messages, so other programs can register devices of their own:
 
 - a Chromecast, UPnP or AirPlay bridge that registers each speaker as a player;
-- an observer that lists apps not speaking the protocol, by polling the server's now-playing data
-  (`getNowPlaying`, Jellyfin's `/Sessions`), as devices with no capabilities, leaving out what the
-  hub reported itself ([section 12](#12-the-media-servers-now-playing));
 - a media server that implements the hub itself ([section 13](#13-inside-a-media-server)).
 
 ## 12. The media server's now playing
