@@ -367,6 +367,13 @@ how:
   which would cost phones battery: the hub answers a command within 10 s and a transfer within
   20 s, so a request with no answer for longer means a dead connection, to close and make again.
 - Clients reconnect with backoff, then send `hello` and a state report again.
+- Without the hub, a client reaches no other device, and a player plays on its own. Once the hub
+  has been out of reach for longer than it takes to restart, or an app back from the background to
+  reconnect (5 s, say), the client takes the other devices for offline, with their last states: an
+  app that controlled one controls its own player again, with that device's queue where it had got
+  to, paused, as when that device goes offline. Back, the hub's `welcome` lists them anew. If two
+  of them played meanwhile, the one whose `playing` report reaches the hub last stops the other
+  ([section 4](#4-player-state-and-the-clock)).
 - On iOS and Android, an app playing in the background keeps running and keeps its connection. A
   paused app in the background gets suspended: it stays listed as offline with its last state, so
   its queue can still be picked up, but it takes no commands until it opens again. Apps should
