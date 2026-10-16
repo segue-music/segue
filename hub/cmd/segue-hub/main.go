@@ -44,6 +44,10 @@ func main() {
 	kind := hub.KindNavidrome // SEGUE_AUTH=none with no media server: nothing to ask
 
 	if mediaServerURL != "" {
+		if !httpURL(mediaServerURL) {
+			fail("SEGUE_MEDIA_SERVER_URL is not an http:// or https:// URL", "mediaServer", mediaServerURL)
+		}
+
 		var err error
 
 		kind, err = detectMediaServer(ctx, log, mediaServerURL)
@@ -141,6 +145,17 @@ func detectMediaServer(ctx context.Context, log *slog.Logger, mediaServerURL str
 
 		wait = min(2*wait, 30*time.Second)
 	}
+}
+
+// httpURL says whether rawURL is an http or https URL with a host. Without one ("127.0.0.1:4533"),
+// asking the media server fails the same way each time, and detectMediaServer would wait forever.
+func httpURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	return (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 // loopbackOrigin says whether origin, a page's, is served from this machine.
