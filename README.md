@@ -178,12 +178,6 @@ library: its checks, id translation and reports are pluggable (`Authenticate`, `
    ([#5154](https://github.com/navidrome/navidrome/discussions/5154#discussioncomment-18927485)),
    whose maintainer plans this in Navidrome's own API, and to OpenSubsonic's app and server
    developers ([#283](https://github.com/opensubsonic/open-subsonic-api/discussions/283)).
-2. Internet radios (Navidrome's `getInternetRadioStations`) in the protocol, so that a station
-   moves between devices as a queue does: a queue item of `"kind": "radio"`, alone in its
-   queue, with the station's `streamUrl` (Navidrome's Jellyfin API has no radios, so the id can't be
-   translated) and what it plays now (ICY `StreamTitle`). It has no position, so no `seek`, `next`
-   or `previous`; a `playsRadio` in the `hello` keeps it from apps that can't play it; the hub
-   doesn't report it to the media server (section 12); and a player opens only `http` and `https`.
 
 ## License
 
