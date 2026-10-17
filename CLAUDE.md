@@ -96,8 +96,8 @@ The app's tests against the hub (segue-app's `test/hub_test.dart`) run the binar
   constants in `protocol.go`) reach users through the app, which turns them into messages in their
   language (`describeError` in segue-app's `lib/ui/widgets/errors.dart`, from its ARB files), so a
   new one needs an entry there.
-- Commit messages are in Portuguese: a short title (prefixed `Hub:` for hub-only changes) and a
-  body explaining the behaviour and why.
+- Commit messages are in Portuguese and are only a short title (prefixed `Hub:` for hub-only
+  changes), with no body.
 - `README.md` has "Next steps". Update it when a feature lands.
 - The hub follows the app's code conventions (segue-app's `CLAUDE.md`), in their Go form below.
 - Go layout is `gofmt`'s, except for blank lines, which it keeps but never adds, so these are by
